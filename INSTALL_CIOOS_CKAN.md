@@ -26,7 +26,7 @@ sudo docker-compose --version
 ```bash
 git clone -b iys_master https://github.com/HakaiInstitute/ckan.git
 cd ckan
-git checkout cioos
+git checkout iys_master
 git submodule init
 git submodule update
 ```
