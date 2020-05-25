@@ -51,6 +51,9 @@ services:
       - db
     <<: *ckan_app
     <<: *ckan_build
+    networks:
+      - default
+      - world
 
   ckan_gather_harvester:
      <<: *ckan_app
