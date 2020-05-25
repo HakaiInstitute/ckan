@@ -137,3 +137,7 @@ services:
   #   restart: always
   #   volumes:
   #     - ./pycsw/pycsw.cfg:/etc/pycsw/pycsw.cfg
+
+networks:
+  default:
+  world:
