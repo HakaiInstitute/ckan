@@ -133,6 +133,9 @@ schema. In this case the version should be set to the next CKAN version number.
     <field name="tags_en" type="string" indexed="true" stored="true" multiValued="true"/>
     <field name="tags_fr" type="string" indexed="true" stored="true" multiValued="true"/>
     <field name="keywords" type="string" indexed="true" stored="true"/>
+    <field name="mapp-theme" type="string" indexed="true" stored="true" multiValued="true"/>
+    <field name="mapp-sub-theme" type="string" indexed="true" stored="true" multiValued="true"/>
+    <field name="tags" type="string" indexed="true" stored="true" multiValued="true"/>
     <field name="eov" type="string" indexed="true" stored="true" multiValued="true"/>
     <field name="groups" type="string" indexed="true" stored="true" multiValued="true"/>
     <field name="organization" type="string" indexed="true" stored="true" multiValued="false"/>
