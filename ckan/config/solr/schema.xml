@@ -84,11 +84,33 @@ schema. In this case the version should be set to the next CKAN version number.
 
     <!-- Date range type -->
     <fieldType name="date_range" class="solr.DateRangeField"/>
+
+    <!-- XML type -->
+    <fieldType name="xml" class="solr.TextField" positionIncrementGap="100">
+        <analyzer type="index">
+            <charFilter class="solr.HTMLStripCharFilterFactory"/>
+            <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+            <filter class="solr.WordDelimiterFilterFactory" generateWordParts="1" generateNumberParts="1" catenateWords="1" catenateNumbers="1" catenateAll="0" splitOnCaseChange="1"/>
+            <filter class="solr.LowerCaseFilterFactory"/>
+            <filter class="solr.SnowballPorterFilterFactory" language="English" protected="protwords.txt"/>
+            <filter class="solr.ASCIIFoldingFilterFactory"/>
+        </analyzer>
+        <analyzer type="query">
+            <charFilter class="solr.HTMLStripCharFilterFactory"/>
+            <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+            <filter class="solr.SynonymFilterFactory" synonyms="synonyms.txt" ignoreCase="true" expand="true"/>
+            <filter class="solr.WordDelimiterFilterFactory" generateWordParts="1" generateNumberParts="1" catenateWords="0" catenateNumbers="0" catenateAll="0" splitOnCaseChange="1"/>
+            <filter class="solr.LowerCaseFilterFactory"/>
+            <filter class="solr.SnowballPorterFilterFactory" language="English" protected="protwords.txt"/>
+            <filter class="solr.ASCIIFoldingFilterFactory"/>
+        </analyzer>
+    </fieldType>
 </types>
 
 
 <fields>
 
+    <field name="citation" type="text" indexed="true" stored="true" multiValued="false"/>
     <field name="responsible_organizations" type="string" indexed="true" stored="true" multiValued="true"/>
     <field name="temporal-extent-range" type="date_range" indexed="true" stored="true" multiValued="false" />
     <field name="temporal-extent-begin" type="date" indexed="true" stored="true" multiValued="false" />
@@ -147,7 +169,9 @@ schema. In this case the version should be set to the next CKAN version number.
     <field name="res_format" type="string" indexed="true" stored="true" multiValued="true"/>
     <field name="res_url" type="string" indexed="true" stored="true" multiValued="true"/>
     <field name="res_type" type="string" indexed="true" stored="true" multiValued="true"/>
-
+    
+    <field name="extras_harvest_document_content" type="xml" indexed="true" stored="true" multiValued="false"/>
+    <field name="harvest_document_content" type="xml" indexed="true" stored="true" multiValued="false"/>
     <!-- catchall field, containing all other searchable text fields (implemented
          via copyField further on in this schema  -->
     <field name="text" type="text" indexed="true" stored="false" multiValued="true"/>
@@ -216,5 +240,6 @@ schema. In this case the version should be set to the next CKAN version number.
 <copyField source="res_description" dest="text"/>
 <copyField source="maintainer" dest="text"/>
 <copyField source="author" dest="text"/>
+<copyField source="extras_harvest_document_content" dest="text"/>
 
 </schema>
