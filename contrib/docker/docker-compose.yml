@@ -47,7 +47,6 @@ services:
       - solr
       # - redis
     <<: *ckan_app
-    <<: *ckan_build
     networks:
       - default
       - world
