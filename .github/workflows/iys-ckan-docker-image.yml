@@ -3,6 +3,8 @@ name: IYS CKAN Docker Image
 on:
   workflow_dispatch:
     branches: [ iys_master ]
+  push:
+    branches: [ iys_master ]
 env:
   submod_path: "contrib/docker/src"
 
