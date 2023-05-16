@@ -5,6 +5,8 @@ on:
     branches: [ iys_master ]
   push:
     branches: [ iys_master ]
+    tags:
+      - iys-*
 env:
   submod_path: "contrib/docker/src"
 
@@ -25,6 +27,9 @@ jobs:
     - run: cp ./contrib/docker/pycsw/pycsw.cfg.template ./contrib/docker/pycsw/pycsw.cfg
     - name: Set current date as TAG env variable for push requests
       run: echo "TAG=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+    - name: Get git tag
+      if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+      run: echo "TAG=${{  github.ref_name }}" >> $GITHUB_ENV
     - name: Login to DockerHub
       uses: docker/login-action@v1
       with:
