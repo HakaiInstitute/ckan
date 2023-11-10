@@ -147,4 +147,3 @@ services:
 
 networks:
   default:
-  world:
