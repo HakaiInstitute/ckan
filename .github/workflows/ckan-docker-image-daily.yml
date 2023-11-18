@@ -1,13 +1,13 @@
-name: CKAN Docker Image
+name: MaPP CKAN Docker Image
 
 on:
   workflow_dispatch:
   push:
-   branches: [ cioos ]
+   branches: [ MaPP_master ]
    tags:
-      - cioos-*
+      - mapp-*
   pull_request:
-    branches: [ cioos ]
+    branches: [ MaPP_master ]
   release:
     types: [published]
 
@@ -25,7 +25,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: echo "TAG=PR${{ github.event.pull_request.number }}" >> $GITHUB_ENV
 
-      - run: docker run --rm -it lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} cioos/ckan:$TAG
+      - run: docker run --rm -it lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} hakaiinstitute/ckan:$TAG
 
   build_ckan:
     name: build ckan docker image
@@ -80,7 +80,7 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         tags: |
-          cioos/ckan:${{env.TAG}}
+          hakaiinstitute/ckan:${{env.TAG}}
 
     - if: github.event_name != 'pull_request'
       name: Build and push
@@ -91,17 +91,17 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         tags: |
-          cioos/ckan:latest
-          cioos/ckan:${{env.TAG}}
+          hakaiinstitute/ckan:latest
+          hakaiinstitute/ckan:${{env.TAG}}
 
     - if: github.event_name == 'pull_request'
       uses: mshick/add-pr-comment@v1
       with:
         message: |
-          Image has been pushed to [cioos/ckan](https://hub.docker.com/repository/docker/cioos/ckan)
+          Image has been pushed to [hakaiinstitute/ckan](https://hub.docker.com/repository/docker/hakaiinstitute/ckan)
           ## Testing Quick Start
           ### Pull image
-          `sudo docker pull cioos/ckan:${{ env.TAG }}`
+          `sudo docker pull hakaiinstitute/ckan:${{ env.TAG }}`
           or
           `sudo CKAN_TAG=${{ env.TAG }} docker-compose pull ckan`
           ### Remove Home Volume and Restart
