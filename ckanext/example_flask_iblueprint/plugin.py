@@ -11,21 +11,8 @@ def hello_plugin():
     return u'Hello World, this is served from an extension'
 
 
-def override_pylons_about():
-    u'''A simple replacement for the pylons About page.'''
-    return render_template(u'about.html')
-
-
-def override_pylons_about_with_core_template():
-    u'''
-    Override the pylons about controller to render the core about page
-    template.
-    '''
-    return render_template(u'home/about.html')
-
-
-def override_flask_hello():
-    u'''A simple replacement for the flash Hello view function.'''
+def override_flask_home():
+    u'''A simple replacement for the flash Home view function.'''
     html = u'''<!DOCTYPE html>
 <html>
     <head>
@@ -71,6 +58,21 @@ def helper_here():
     return render_template_string(html)
 
 
+def flask_request():
+    u'''A simple template with a helper that exists. Rendering with a helper
+    shouldn't raise an exception.'''
+
+    html = u'''<!DOCTYPE html>
+    <html>
+        <head>
+            <title>Hello from Flask</title>
+        </head>
+        <body> {{ request.params }} </body>
+    </html>'''
+
+    return render_template_string(html)
+
+
 class ExampleFlaskIBlueprintPlugin(p.SingletonPlugin):
     u'''
     An example IBlueprint plugin to demonstrate Flask routing from an
@@ -94,12 +96,10 @@ class ExampleFlaskIBlueprintPlugin(p.SingletonPlugin):
         # Add plugin url rules to Blueprint object
         rules = [
             (u'/hello_plugin', u'hello_plugin', hello_plugin),
-            (u'/about', u'about', override_pylons_about),
-            (u'/about_core', u'about_core',
-                override_pylons_about_with_core_template),
-            (u'/hello', u'hello', override_flask_hello),
+            (u'/', u'home', override_flask_home),
             (u'/helper_not_here', u'helper_not_here', helper_not_here),
             (u'/helper', u'helper_here', helper_here),
+            (u'/flask_request', u'flask_request', flask_request),
         ]
         for rule in rules:
             blueprint.add_url_rule(*rule)

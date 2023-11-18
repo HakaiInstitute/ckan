@@ -6,13 +6,14 @@ import datetime
 import logging
 import magic
 import mimetypes
+from six.moves.urllib.parse import urlparse
 
 from werkzeug.datastructures import FileStorage as FlaskFileStorage
 
 import ckan.lib.munge as munge
 import ckan.logic as logic
 import ckan.plugins as plugins
-from ckan.common import config
+from ckan.common import config, aslist
 
 ALLOWED_UPLOAD_TYPES = (cgi.FieldStorage, FlaskFileStorage)
 MB = 1 << 20
@@ -51,6 +52,8 @@ def get_uploader(upload_to, old_filename=None):
     upload = None
     for plugin in plugins.PluginImplementations(plugins.IUploader):
         upload = plugin.get_uploader(upload_to, old_filename)
+        if upload:
+            break
 
     # default uploader
     if upload is None:
@@ -64,6 +67,8 @@ def get_resource_uploader(data_dict):
     upload = None
     for plugin in plugins.PluginImplementations(plugins.IUploader):
         upload = plugin.get_resource_uploader(data_dict)
+        if upload:
+            break
 
     # default uploader
     if upload is None:
@@ -79,20 +84,8 @@ def get_storage_path():
     # None means it has not been set. False means not in config.
     if _storage_path is None:
         storage_path = config.get('ckan.storage_path')
-        ofs_impl = config.get('ofs.impl')
-        ofs_storage_dir = config.get('ofs.storage_dir')
         if storage_path:
             _storage_path = storage_path
-        elif ofs_impl == 'pairtree' and ofs_storage_dir:
-            log.warn('''Please use config option ckan.storage_path instead of
-                     ofs.storage_dir''')
-            _storage_path = ofs_storage_dir
-            return _storage_path
-        elif ofs_impl:
-            log.critical('''We only support local file storage form version 2.2
-                         of ckan please specify ckan.storage_path in your
-                         config for your uploads''')
-            _storage_path = False
         else:
             log.critical('''Please specify a ckan.storage_path in your config
                          for your uploads''')
@@ -129,12 +122,17 @@ class Upload(object):
             return
         self.storage_path = os.path.join(path, 'storage',
                                          'uploads', object_type)
-        try:
-            os.makedirs(self.storage_path)
-        except OSError as e:
-            # errno 17 is file already exists
-            if e.errno != 17:
-                raise
+        # check if the storage directory is already created by
+        # the user or third-party
+        if os.path.isdir(self.storage_path):
+            pass
+        else:
+            try:
+                os.makedirs(self.storage_path)
+            except OSError as e:
+                # errno 17 is file already exists
+                if e.errno != 17:
+                    raise
         self.object_type = object_type
         self.old_filename = old_filename
         if old_filename:
@@ -156,14 +154,16 @@ class Upload(object):
         if not self.storage_path:
             return
 
-        if isinstance(self.upload_field_storage, (ALLOWED_UPLOAD_TYPES)):
-            self.filename = self.upload_field_storage.filename
-            self.filename = str(datetime.datetime.utcnow()) + self.filename
-            self.filename = munge.munge_filename_legacy(self.filename)
-            self.filepath = os.path.join(self.storage_path, self.filename)
-            data_dict[url_field] = self.filename
-            self.upload_file = _get_underlying_file(self.upload_field_storage)
-            self.tmp_filepath = self.filepath + '~'
+        if isinstance(self.upload_field_storage, ALLOWED_UPLOAD_TYPES):
+            if self.upload_field_storage.filename:
+                self.filename = self.upload_field_storage.filename
+                self.filename = str(datetime.datetime.utcnow()) + self.filename
+                self.filename = munge.munge_filename_legacy(self.filename)
+                self.filepath = os.path.join(self.storage_path, self.filename)
+                data_dict[url_field] = self.filename
+                self.upload_file = _get_underlying_file(
+                    self.upload_field_storage)
+                self.tmp_filepath = self.filepath + '~'
         # keep the file if there has been no change
         elif self.old_filename and not self.old_filename.startswith('http'):
             if not self.clear:
@@ -177,6 +177,8 @@ class Upload(object):
         been validated and flushed to the db. This is so we do not store
         anything unless the request is actually good.
         max_size is size in MB maximum of the file'''
+
+        self.verify_type()
 
         if self.filename:
             with open(self.tmp_filepath, 'wb+') as output_file:
@@ -196,6 +198,31 @@ class Upload(object):
                 os.remove(self.old_filepath)
             except OSError:
                 pass
+
+    def verify_type(self):
+        if not self.filename:
+            return
+
+        mimetypes = aslist(
+            config.get("ckan.upload.{}.mimetypes".format(self.object_type)))
+
+        types = aslist(
+            config.get("ckan.upload.{}.types".format(self.object_type)))
+
+        if not mimetypes and not types:
+            return
+
+        actual = magic.from_buffer(self.upload_file.read(1024), mime=True)
+        self.upload_file.seek(0, os.SEEK_SET)
+        err = {self.file_field: [
+            "Unsupported upload type: {actual}".format(actual=actual)]}
+
+        if mimetypes and actual not in mimetypes:
+            raise logic.ValidationError(err)
+
+        type_ = actual.split("/")[0]
+        if types and type_ not in types:
+            raise logic.ValidationError(err)
 
 
 class ResourceUpload(object):
@@ -221,10 +248,11 @@ class ResourceUpload(object):
         upload_field_storage = resource.pop('upload', None)
         self.clear = resource.pop('clear_upload', None)
 
-        if config_mimetype_guess == 'file_ext':
+        if url and config_mimetype_guess == 'file_ext' and urlparse(url).path:
             self.mimetype = mimetypes.guess_type(url)[0]
 
-        if isinstance(upload_field_storage, ALLOWED_UPLOAD_TYPES):
+        if bool(upload_field_storage) and \
+                isinstance(upload_field_storage, ALLOWED_UPLOAD_TYPES):
             self.filesize = 0  # bytes
 
             self.filename = upload_field_storage.filename

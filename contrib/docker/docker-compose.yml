@@ -1,30 +1,41 @@
 # docker-compose build && docker-compose up -d
 # If "docker-compose logs ckan" shows DB not ready, run "docker-compose restart ckan" a few times.
+
 version: "3.4"
+
+x-common-ckan-variables: &common-ckan-variables
+  CKAN_SQLALCHEMY_URL: postgresql://ckan:${POSTGRES_PASSWORD}@db/ckan
+  CKAN_DATASTORE_WRITE_URL: postgresql://ckan:${POSTGRES_PASSWORD}@db/datastore
+  CKAN_DATASTORE_READ_URL: postgresql://datastore_ro:${DATASTORE_READONLY_PASSWORD}@db/datastore
+  CKAN_SOLR_URL: http://solr:8983/solr/ckan
+  CKAN_REDIS_URL: redis://redis:6379/1
+  CKAN_DATAPUSHER_URL: http://datapusher:8800
+  CKAN_SITE_URL: ${CKAN_SITE_URL}
+  CKAN_MAX_UPLOAD_SIZE_MB: ${CKAN_MAX_UPLOAD_SIZE_MB}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  DS_RO_PASS: ${DATASTORE_READONLY_PASSWORD}
+  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
 
 x-ckan: &ckan_app
   container_name: ckan
-  image: hakaiinstitute/ckan:${CKAN_TAG}
+  image: cioos/ckan:${CKAN_TAG}
   links:
     - db
     - solr
-    # - redis
+    - redis
   ports:
     - "0.0.0.0:${CKAN_PORT}:5000"
   environment:
     # Defaults work with linked containers, change to use own Postgres, SolR, Redis or Datapusher
-    - CKAN_SQLALCHEMY_URL=postgresql://ckan:${POSTGRES_PASSWORD}@db/ckan
-    - CKAN_DATASTORE_WRITE_URL=postgresql://ckan:${POSTGRES_PASSWORD}@db/datastore
-    - CKAN_DATASTORE_READ_URL=postgresql://datastore_ro:${DATASTORE_READONLY_PASSWORD}@db/datastore
-    - CKAN_SOLR_URL=http://solr:8983/solr/ckan
-    - CKAN_REDIS_URL=redis://redis:6379/1
-    - CKAN_DATAPUSHER_URL=http://datapusher:8800
-    - CKAN_SITE_URL=${CKAN_SITE_URL}
-    - CKAN_MAX_UPLOAD_SIZE_MB=${CKAN_MAX_UPLOAD_SIZE_MB}
-    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    - DS_RO_PASS=${DATASTORE_READONLY_PASSWORD}
+    <<: *common-ckan-variables
     #- TZ=Canada/Vancouver
-  #restart: always
+    # Debug with pdb (example) - Interact with `docker attach $(docker container ls -qf name=ckan)`
+    #command: 'python -m pdb /usr/lib/ckan/venv/bin/ckan --config /etc/ckan/production.ini run --host 0.0.0.0 --passthrough-errors'
+    #tty: true
+    #stdin_open: true
+  restart: unless-stopped
   volumes:
     - "/etc/localtime:/etc/localtime:ro" # remove and use TZ setting if running on windows
     - ckan_config:/etc/ckan
@@ -37,26 +48,30 @@ volumes:
   ckan_home:
   ckan_storage:
   pg_data:
+  solr_data:
+  redis_data:
 
 
 
 services:
   ckan:
+    <<: *ckan_app
+    build:
+      context: ../../
+      args:
+        - CKAN_SITE_URL=${CKAN_SITE_URL}
     depends_on:
       - db
       - solr
-      # - redis
-    <<: *ckan_app
-    # ports:
-      # - "5678:5678" # used by the debugger during development. NOT for production
+      - redis
+    
 
   ckan_gather_harvester:
      <<: *ckan_app
      container_name: ckan_gather_harvester
-     image: hakaiinstitute/ckan:${CKAN_TAG}
      entrypoint: /ckan-harvester-entrypoint.sh
-     user: root
-     command: ckan-paster --plugin=ckanext-harvest harvester gather_consumer -c /etc/ckan/production.ini
+     user: ckan
+     command: ckan --config=/etc/ckan/production.ini harvester gather-consumer
      ports: []
      depends_on:
        - ckan
@@ -64,10 +79,9 @@ services:
   ckan_fetch_harvester:
      <<: *ckan_app
      container_name: ckan_fetch_harvester
-     image: hakaiinstitute/ckan:${CKAN_TAG}
      entrypoint: /ckan-harvester-entrypoint.sh
-     user: root
-     command: ckan-paster --plugin=ckanext-harvest harvester fetch_consumer -c /etc/ckan/production.ini
+     user: ckan
+     command: ckan --config=/etc/ckan/production.ini harvester fetch-consumer
      ports: []
      depends_on:
        - ckan
@@ -76,7 +90,6 @@ services:
   ckan_run_harvester:
      <<: *ckan_app
      container_name: ckan_run_harvester
-     image: hakaiinstitute/ckan:${CKAN_TAG}
      entrypoint: /ckan-run-harvester-entrypoint.sh
      user: root
      command: /bin/bash -c "echo 'ckan_run_harvester started' && cron -f 2>&1 "
@@ -89,31 +102,38 @@ services:
   datapusher:
     container_name: datapusher
     image: clementmouchet/datapusher
-    #restart: always
+    restart: unless-stopped
     ports:
       - "8800:8800"
 
   db:
     container_name: db
-    image: hakaiinstitute/postgresql:latest
+    image: cioos/postgresql:latest
     ports:
        - "5432:5432"
     environment:
       - DS_RO_PASS=${DATASTORE_READONLY_PASSWORD}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      #- TZ=Canada/Vancouver
-    #restart: always
+      - PGDATA=/var/lib/postgresql/data
     volumes:
       - "/etc/localtime:/etc/localtime:ro" # remove and use TZ setting if running on windows
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "ckan"]
 
   solr:
     container_name: solr
-    image: hakaiinstitute/solr:latest
-    #restart: always
+    image: cioos/solr:latest
+    restart: unless-stopped
+    ports:
+      - "8983:8983"
+    volumes:
+      - solr_data:/var/solr
 
   # redis is used by the datapusher and the spatial fetch and gather harvesters
   redis:
     container_name: redis
     image: redis:latest
-    #restart: always
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data

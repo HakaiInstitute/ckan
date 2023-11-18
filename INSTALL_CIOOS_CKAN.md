@@ -67,19 +67,76 @@ These instructions are for CentOS 7.  They have been modified from the original 
 
 ### Install Docker
 
-```bash
-sudo yum install -y yum-utils device-mapper-persistent-data   lvm2
-sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-sudo yum install docker-ce docker-ce-cli containerd.io
-sudo systemctl start docker
+```
+sudo apt-get update
+sudo apt-get install docker
 ```
 
-### Install docker-compose
+#### Install latest docker-compose
 
 ```bash
 sudo curl -L "https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
-sudo docker-compose --version
+docker-compose --version
+```
+
+#### Install Apache
+
+If proxying docker behind Apache (recommended) you will need to have that installed as well. nginx will also work but is not covered in this guide.
+
+```
+sudo apt-get update
+sudo apt-get install docker-compose
+```
+
+#### Add Apache modules
+
+We will use apache to proxy our docker containers so will need a few modules to make that work
+
+```
+sudo a2enmod ssl
+sudo a2enmod proxy
+sudo a2enmod proxy_http
+sudo service apache2 restart
+```
+
+#### Add noindex robot tags to headers
+
+You may want to prevent search engins from indexing some your ckan pages. The
+following mod_header rules have the same affect as the robots.txt file in the
+theme repo. I add them to the location field
+
+```
+# CKAN
+<location />
+...
+  <IfModule mod_headers.c>
+      <If "%{THE_REQUEST} =~ m#[\S]+\?[\S]+#">
+          Header Set X-Robots-Tag "noindex, noarchive, nosnippet"
+      </If>
+      <If "%{THE_REQUEST} =~ m#[\S]+/dataset/rate/[\S]*#">
+          Header Set X-Robots-Tag "noindex, noarchive, nosnippet"
+      </If>
+      <If "%{THE_REQUEST} =~ m#[\S]+/revision/[\S]*#">
+          Header Set X-Robots-Tag "noindex, noarchive, nosnippet"
+      </If>
+      <If "%{THE_REQUEST} =~ m#[\S]+/dataset/[\S]+/history/[\S]*#">
+          Header Set X-Robots-Tag "noindex, noarchive, nosnippet"
+      </If>
+      <If "%{THE_REQUEST} =~ m#[\S]+/api/[\S]*#">
+          Header Set X-Robots-Tag "noindex, noarchive, nosnippet"
+      </If>
+      <If "%{THE_REQUEST} =~ m#[\S]+/harvest[\S]*#">
+          Header Set X-Robots-Tag "noindex, noarchive, nosnippet"
+      </If>
+      <If "%{THE_REQUEST} =~ m#[\S]+/_tracking[\S]*#">
+          Header Set X-Robots-Tag "noindex, noarchive, nosnippet"
+      </If>
+  </IfModule>
+
+    ProxyPass http://localhost:5000/
+    ProxyPassReverse http://localhost:5000/
+</location>
 ```
 
 ## Windows
@@ -118,9 +175,15 @@ The rest of the instructions assume you are using a terminal in a Linux environm
 > **NOTE:** The following instructions assume you are installing CKAN in your home directory (~)
 
 ```bash
-git clone -b hakai_master https://github.com/HakaiInstitute/ckan.git
+git clone -b cioos https://github.com/cioos-siooc/ckan.git
 cd ckan
 git checkout cioos
+```
+
+add submodules
+
+```
+cd ~/ckan
 git submodule init
 git submodule update
 ```
@@ -196,22 +259,21 @@ CKAN doesn't start with an admin user so it must be created via command line.  T
 You'll be asked to supply an email address and a password (8 characters in length minimum) and then to confirm the password.
 
 ```bash
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckan sysadmin -c /etc/ckan/production.ini add admin
+sudo docker exec -it ckan ckan --config /etc/ckan/production.ini sysadmin add admin
 ```
 
-> **NOTE:** You'll receive warnings about Python 2 no longer being supported, you can safely ignore these for now - they will go away when the base version of CKAN is migrated to one that supports Python 3.
 ### Update shared secrets and app uuid
 In production.ini, update beaker.session.secret and app_instance_uuid values. These values are generate by the make-config paster command.
 
 ```bash
 export VOL_CKAN_HOME=`sudo docker volume inspect docker_ckan_home | jq -r -c '.[] | .Mountpoint'`
 cd ~/ckan/contrib/docker/
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckan make-config ckan ./temp.ini
+sudo docker exec -it ckan ckan generate config ./temp.ini
 
 sudo grep 'beaker.session.secret' $VOL_CKAN_HOME/venv/src/production.ini
 sudo grep 'app_instance_uuid' $VOL_CKAN_HOME/venv/src/production.ini
 ```
-then update the corosponing lines in production.init
+then update the corosponing lines in production.ini
 
 ```bash
 sudo nano $VOL_CKAN_HOME/venv/src/production.ini
@@ -332,6 +394,19 @@ Once all these changes have been made you'll need to restart Apache to see the r
 
 ```bash
 sudo apachectl restart
+```
+
+### Enable sitemap generation
+create a cronjob on the host machine to generate a sitemap. Daily is likely sufficent. The cron job must be run as the same user running docker. This could be root on some systems. The sitemap files will be placed into the ckan home volume via the ckan container. The sitemap will be accesable at https://[ckan_site]/sitemap/sitemap.xml
+
+```bash
+crontab -e
+or
+sudo crontab -e
+```
+
+```crontab
+0 * * * * docker exec -it ckan ckan --config=/etc/ckan/production.ini sitemap create
 ```
 
 ## Setup Harvesters
@@ -484,90 +559,9 @@ It may become necessary to reindex harvesters, especially if they no longer repo
 > **NOTE:** If modifying the harvester config you will also need to reindex to make the new config take affect and restart the ckan_fetch_harvester container
 
 ```bash
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckanext-harvest harvester reindex --config=/etc/ckan/production.ini
+sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini harvester reindex
 cd ~/ckan/contrib/docker
 sudo docker-compose restart ckan_fetch_harvester
-```
-
-## Finish setting up pyCSW
-
-Create the pyCSW database in existing [PostgreSQL](https://www.postgresql.org/) container (db) and install [PostGIS](https://postgis.net/)
-
-```bash
-sudo docker exec -it db psql -U ckan
-CREATE DATABASE pycsw OWNER ckan ENCODING 'utf-8';
-\c pycsw
-CREATE EXTENSION postgis;
-\q
-```
-
-setup pycsw database tables.
-
-```bash
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckanext-spatial ckan-pycsw setup -p /usr/lib/ckan/venv/src/pycsw/default.cfg
-```
-
-start pycsw container
-
-```bash
-sudo docker-compose up -d pycsw
-```
-
-### Test GetCapabilities
-
-<https://localhost/ckan/csw/?service=CSW&version=2.0.2&request=GetCapabilities>
-
-or
-
-<https://localhost/csw/?service=CSW&version=2.0.2&request=GetCapabilities>
-
-### Useful pyCSW commands
-
-access pycsw-admin
-
-```bash
-sudo docker exec -ti pycsw pycsw-admin.py -h
-```
-
-Load the CKAN datasets into pycsw
-
-```bash
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckanext-spatial ckan-pycsw load -p /usr/lib/ckan/venv/src/pycsw/default.cfg -u http://localhost:5000
-```
-
-ckan-pycsw commands
-
-```bash
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckanext-spatial ckan-pycsw --help
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckanext-spatial ckan-pycsw setup -p /usr/lib/ckan/venv/src/pycsw/default.cfg
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckanext-spatial ckan-pycsw set_keywords -p /usr/lib/ckan/venv/src/pycsw/default.cfg -u http://localhost:5000
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckanext-spatial ckan-pycsw load -p /usr/lib/ckan/venv/src/pycsw/default.cfg -u http://localhost:5000
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckanext-spatial ckan-pycsw clear -p /usr/lib/ckan/venv/src/pycsw/default.cfg
-```
-
-### Errors while pyCSW loading
-
-if you get "**Error:Cannot commit to repository**" and "**HINT: Values larger than 1/3 of a buffer page cannot be indexed.**" you are likely loading abstracts or other fields that are to big to be indexed in the database.
-
-You can either remove the index or switch to an index using the md5 encoded version of the value.
-
-Connect to database
-
-```bash
-sudo docker exec -i db psql -U ckan
-\c pycsw
-```
-
-Remove index
-
-```sql
-DROP INDEX ix_records_abstract;
-```
-
-Add md5 index
-
-```sql
-CREATE INDEX ix_records_abstract ON records((md5(abstract)));
 ```
 
 ## Export Logs from CKAN
@@ -606,11 +600,12 @@ possible wordpress depending on how your site is configured.
 
 ## Update SOLR schema
 
+### OLD METHOD
 This method uses dockers copy command to copy the new schema file into a running solr container
 
 ```bash
 cd ~/ckan
-sudo docker cp ~/ckan/ckan/config/solr/schema.xml solr:/opt/solr/server/solr/ckan/conf
+sudo docker cp ~/ckan/ckan/config/solr/schema.xml solr:/opt/solr/server/solr/configsets/ckan/conf/managed-schema
 ```
 
 Restart solr container
@@ -623,12 +618,41 @@ sudo docker-compose restart solr
 Rebuild search index
 
 ```bash
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckan search-index -o rebuild --config=/etc/ckan/production.ini
+sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini search-index rebuild -o
 ```
+
+### NEW Method
+With the switch to solr 8 we are using managed schemas and you can not update this without rebuilding the solr image. First build or pull a new image and then restart the container.
+
+build or pull
+```bash
+cd ~/ckan/contrib/docker
+sudo docker-compose pull solr
+or 
+sudo docker-compose build solr
+```
+
+recreate container with new schema using shell script
+```bash
+./update_solr.sh 
+```
+
+This will recreate and container and start a index automatically.
 
 ## Update CKAN
 
 If you need to update CKAN to a new version you can either remove the docker_ckan_home volume or update the volume with the new ckan core files. After which you need to rebuild the CKAN image and any docker containers based on that image. If you are working with a live / production system the preferred method is to update the volume and rebuild which will result in the least amount of down time.
+
+enable volume environment variables to make accessing the volumes easier
+
+```bash
+export VOL_CKAN_HOME=`sudo docker volume inspect docker_ckan_home | jq -r -c '.[] | .Mountpoint'`
+export VOL_CKAN_CONFIG=`sudo docker volume inspect docker_ckan_config | jq -r -c '.[] | .Mountpoint'`
+export VOL_CKAN_STORAGE=`sudo docker volume inspect docker_ckan_storage | jq -r -c '.[] | .Mountpoint'`
+echo $VOL_CKAN_HOME
+echo $VOL_CKAN_CONFIG
+echo $VOL_CKAN_STORAGE
+```
 
 update local repo
 
@@ -657,27 +681,16 @@ sudo docker cp ./contrib/docker/ckan-run-harvester-entrypoint.sh ckan_run_harves
 update permissions (optional but recommended)
 
 ```bash
-sudo chown 900:900 -R $VOL_CKAN_HOME/venv/src/
+sudo chown 900:900 -R $VOL_CKAN_HOME/venv/src/ $VOL_CKAN_STORAGE
 ```
 
 or on windows run the command directly in the ckan container
 
-```bash
-sudo docker exec -it ckan chown 900:900 -R $CKAN_HOME
-```
-
-Now rebuild the CKAN docker image
+restart the ckan container
 
 ```bash
 cd ~/ckan/contrib/docker
-sudo docker-compose build ckan
-```
-
-update affected containers.
-
-```bash
-cd ~/ckan/contrib/docker
-sudo docker-compose up -d
+sudo docker-compose restart ckan
 ```
 
 ## Update CKAN extensions
@@ -708,19 +721,17 @@ copy updated extension code to the volumes
 ```bash
 cd ~/ckan/contrib/docker
 sudo cp -r src/ckanext-cioos_theme/ $VOL_CKAN_HOME/venv/src/
-sudo cp -r src/ckanext-googleanalyticsbasic $VOL_CKAN_HOME/venv/src/
 sudo cp -r src/ckanext-cioos_harvest/ $VOL_CKAN_HOME/venv/src/
 sudo cp -r src/ckanext-harvest/ $VOL_CKAN_HOME/venv/src/
 sudo cp -r src/ckanext-spatial/ $VOL_CKAN_HOME/venv/src/
-sudo cp -r src/pycsw/ $VOL_CKAN_HOME/venv/src/
 sudo cp -r src/ckanext-scheming/ $VOL_CKAN_HOME/venv/src/
-sudo cp -r src/ckanext-repeating/ $VOL_CKAN_HOME/venv/src/
-sudo cp -r src/ckanext-composite/ $VOL_CKAN_HOME/venv/src/
 sudo cp -r src/ckanext-fluent/ $VOL_CKAN_HOME/venv/src/
 sudo cp -r src/ckanext-dcat/ $VOL_CKAN_HOME/venv/src/
-sudo cp src/hakai-schema/hakai_schema.json $VOL_CKAN_HOME/venv/src/ckanext-scheming/ckanext/scheming/hakai_schema.json
-sudo cp src/hakai-schema/organization.json $VOL_CKAN_HOME/venv/src/ckanext-scheming/ckanext/scheming/organization.json
-sudo cp src/hakai-schema/ckan_license.json $VOL_CKAN_HOME/venv/src/ckanext-scheming/ckanext/scheming/ckan_license.json
+sudo cp src/cioos-siooc-schema/cioos-siooc_schema.json $VOL_CKAN_HOME/venv/src/ckanext-scheming/ckanext/scheming/cioos_siooc_schema.json
+sudo cp src/cioos-siooc-schema/organization.json $VOL_CKAN_HOME/venv/src/ckanext-scheming/ckanext/scheming/organization.json
+sudo cp src/cioos-siooc-schema/group.json $VOL_CKAN_HOME/venv/src/ckanext-scheming/ckanext/scheming/group.json
+sudo cp src/cioos-siooc-schema/ckan_license.json $VOL_CKAN_HOME/venv/src/ckanext-scheming/ckanext/scheming/ckan_license.json
+sudo cp src/cioos-siooc-schema/*.wkt $VOL_CKAN_HOME/venv/src
 ```
 
 Exporting volumes on windows does not work so another option for copying files to the volumes is to use the `docker cp` command. You must know the path of the named volume in the container you are connecting to and the container must be running for this to work
@@ -734,8 +745,6 @@ docker cp src/ckanext-harvest/ ckan:/usr/lib/ckan/venv/src/
 docker cp src/ckanext-spatial/ ckan:/usr/lib/ckan/venv/src/
 docker cp src/pycsw/ ckan:/usr/lib/ckan/venv/src/
 docker cp src/ckanext-scheming/ ckan:/usr/lib/ckan/venv/src/
-docker cp src/ckanext-repeating/ ckan:/usr/lib/ckan/venv/src/
-docker cp src/ckanext-composite/ ckan:/usr/lib/ckan/venv/src/
 docker cp src/ckanext-fluent/ ckan:/usr/lib/ckan/venv/src/
 docker cp src/ckanext-dcat/ ckan:/usr/lib/ckan/venv/src/
 docker cp src/cioos-siooc-schema/cioos-siooc_schema.json ckan:/usr/lib/ckan/venv/src/ckanext-scheming/ckanext/scheming/cioos_siooc_schema.json
@@ -746,7 +755,7 @@ docker cp src/cioos-siooc-schema/ckan_license.json ckan:/usr/lib/ckan/venv/src/c
 update permissions (optional)
 
 ```bash
-sudo chown 900:900 -R $VOL_CKAN_HOME/venv/src/
+sudo chown 900:900 -R $VOL_CKAN_HOME/venv/src/ $VOL_CKAN_STORAGE
 ```
 
 or on windows run the command directly in the ckan container
@@ -890,8 +899,16 @@ sudo docker-compose up -d
 ### Reindex if project was already installed / running
 
 ```bash
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckan search-index rebuild --config=/etc/ckan/production.ini
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckanext-harvest harvester reindex --config=/etc/ckan/production.ini
+sudo docker exec -it ckan ckan  --config=/etc/ckan/production.ini search-index rebuild
+sudo docker exec -it ckan ckan  --config=/etc/ckan/production.ini harvester reindex
+```
+
+### change selinux permissions on web folders
+to allow access to the docs folder and all files by apache for example you can make an immediate change using the following
+
+```bash
+chcon -Rt httpd_sys_rw_content_t docs
+chcon -Rt httpd_sys_rw_content_t docs/*
 ```
 
 ## Customize interface
@@ -1002,8 +1019,6 @@ with
 googleanalytics.ids = [your Tracking IDs here seperated by spaces]
 ```
 
----
-
 ## Troubleshooting
 
 ### Issues building/starting CKAN
@@ -1084,7 +1099,7 @@ sudo docker exec -u root -it ckan /bin/bash -c "export TERM=xterm; exec bash"
 If you rebuilt the ckan container and no records are showing up, you need to reindex the records.
 
 ```bash
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckan search-index rebuild --config=/etc/ckan/production.ini
+sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini search-index rebuild
 ```
 
 ### Running out of hard drive space?
@@ -1128,7 +1143,7 @@ Delete and re clone the ckan repo.
 If you edit a harvester config and then reharvest the existing harvester will continue to use the in memory harvester config. To solve this you should reindex the harvesters and restart the harvester docker containers
 
 ```bash
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckanext-harvest harvester reindex --config=/etc/ckan/production.ini
+sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini harvester reindex
 sudo docker-compose restart ckan_run_harvester ckan_fetch_harvester ckan_gather_harvester
 ```
 
@@ -1175,6 +1190,108 @@ You may get a file permissions error after the new volume is created. reset perm
 
 ```bash
 cd ~/ckan/contrib/docker
-sudo chown 900:900 -R $VOL_CKAN_HOME/venv/src/
+sudo chown 900:900 -R $VOL_CKAN_HOME/venv/src/ $VOL_CKAN_STORAGE
 sudo docker-compose up -d
+```
+
+### reseting the config
+
+If you enter an improper value into the config interface you may *accidentally* lock yourself out of it.  If this happens you'll need to update the values by using the CKAN API with an [authorization token](https://ckan.readthedocs.io/en/2.9/api/index.html#authentication-and-api-tokens).
+
+**NOTE:** If you do not have the `api_token.jwt.encode.secret`, `api_token.jwt.decode.secret` and `beaker.session.secret` fields specified in **production.ini** then you will get an error message when you try to generate a token.
+
+A token will still be generated but will not be displayed to you, which is less than helpful.
+
+#### Generating an Authorization token
+
+Substitute `[username]` with the username of the user you want to generate a token for, the `[token_name]` field is an arbitrary value to describe the purpose of the token.
+
+Do not be surprised if the generated token is quite long.
+
+```bash
+sudo docker exec -it ckan ckan --config /etc/ckan/production.ini user token add [username] [token_name]
+```
+
+#### Updating config settings using the CKAN API
+
+Now that you have an authorization token you can use the `config_option_update` command to update your CKAN configuration.  To see what values you can alter at runtime make a call to the `config_option_list` command.  Both commands require an authorization token or you'll get a permission denied error.
+
+Configuration updates must be in the form of JSON as per the example below.
+
+**NOTE:** Substitute `XXX` below with your authorization token.
+
+Get list of configuration options that can be updated:
+
+```bash
+curl -H "Authorization: XXX" http://localhost:5000/api/action/config_option_list
+```
+
+Example of updating a configuration value
+
+```bash
+curl -H "Authorization: XXX" http://localhost:5000/api/action/config_option_update -d "{\"ckan.header_file_name\": \"/menu/atlantic_menu_list.html\"}"
+```
+
+
+### Clearing a harvester crashes the site
+
+If very large numbers of harvest objects are created without being cleaned out it
+is possible for the number to get to the point where trying to clear a harvester
+will cause the database to max out it's cpu usage and take down the site. This will
+likely also crash the DB eventually thus causing the transaction to fail and
+preventing the system from fixing the problem. To solve we need to delete harvest
+objects in chunks
+
+Connect to db instance using psql
+```bash
+sudo docker exec -u ckan -it ckan psql -h db
+```
+
+Run delete by chunk code
+```sql
+select count(id) from harvest_object;
+select count(*) from harvest_object_extra
+
+begin;
+  with a as (
+    select id from harvest_object where package_id IS NULL
+  )
+  delete from harvest_object_error
+    USING a
+    where harvest_object_id = a.id;
+
+  with a as (
+    select id from harvest_object where package_id IS NULL
+  )
+  delete from harvest_object_extra
+    USING a
+    where harvest_object_id = a.id;
+
+  DO $$
+  DECLARE
+  BEGIN
+    LOOP
+      raise notice '.';
+      delete from harvest_object where id
+        in (select id from harvest_object where package_id IS NULL limit 500);
+      IF NOT FOUND THEN
+        EXIT;
+      END IF;
+      perform pg_sleep(0.05);
+    END LOOP;
+  END $$;
+
+  delete from harvest_gather_error;
+
+  delete from harvest_job as hj
+    where not exists (
+    select 1
+    from harvest_object ho
+    where hj.id = ho.harvest_job_id
+  );
+
+commit;
+
+select count(id) from harvest_object;
+select count(*) from harvest_object_extra
 ```

@@ -1,11 +1,17 @@
 # encoding: utf-8
 
-from paste.deploy.converters import asbool
+from sqlalchemy import inspect
+from ckan.common import asbool
+import six
 from six import text_type
+from six.moves.urllib.parse import quote
+from werkzeug.utils import import_string, cached_property
 
 import ckan.model as model
+import ckan.lib.api_token as api_token
 from ckan.common import g, request, config, session
 from ckan.lib.helpers import redirect_to as redirect
+from ckan.lib.i18n import get_locales_from_config
 import ckan.plugins as p
 
 import logging
@@ -13,6 +19,24 @@ log = logging.getLogger(__name__)
 
 APIKEY_HEADER_NAME_KEY = u'apikey_header_name'
 APIKEY_HEADER_NAME_DEFAULT = u'X-CKAN-API-Key'
+
+
+class LazyView(object):
+
+    def __init__(self, import_name, view_name=None):
+        self.__module__, self.__name__ = import_name.rsplit(u'.', 1)
+        self.import_name = import_name
+        self.view_name = view_name
+
+    @cached_property
+    def view(self):
+        actual_view = import_string(self.import_name)
+        if self.view_name:
+            actual_view = actual_view.as_view(self.view_name)
+        return actual_view
+
+    def __call__(self, *args, **kwargs):
+        return self.view(*args, **kwargs)
 
 
 def check_session_cookie(response):
@@ -73,6 +97,28 @@ def set_cors_headers_for_response(response):
     return response
 
 
+def set_cache_control_headers_for_response(response):
+
+    # __no_cache__ should not be present when caching is allowed
+    allow_cache = u'__no_cache__' not in request.environ
+
+    if u'Pragma' in response.headers:
+        del response.headers["Pragma"]
+
+    if allow_cache:
+        response.cache_control.public = True
+        try:
+            cache_expire = int(config.get(u'ckan.cache_expires', 0))
+            response.cache_control.max_age = cache_expire
+            response.cache_control.must_revalidate = True
+        except ValueError:
+            pass
+    else:
+        response.cache_control.private = True
+
+    return response
+
+
 def identify_user():
     u'''Try to identify the user
     If the user is identified then:
@@ -93,11 +139,13 @@ def identify_user():
                                             u'Unknown IP Address')
 
     # Authentication plugins get a chance to run here break as soon as a user
-    # is identified.
+    # is identified or a response is returned
     authenticators = p.PluginImplementations(p.IAuthenticator)
     if authenticators:
         for item in authenticators:
-            item.identify()
+            response = item.identify()
+            if response:
+                return response
             try:
                 if g.user:
                     break
@@ -106,13 +154,16 @@ def identify_user():
 
     # We haven't identified the user so try the default methods
     if not getattr(g, u'user', None):
-        _identify_user_default()
+        response = _identify_user_default()
+        if response:
+            return response
 
     # If we have a user but not the userobj let's get the userobj. This means
     # that IAuthenticator extensions do not need to access the user model
     # directly.
-    if g.user and not getattr(g, u'userobj', None):
-        g.userobj = model.User.by_name(g.user)
+    if g.user:
+        if not getattr(g, u'userobj', None) or inspect(g.userobj).expired:
+            g.userobj = model.User.by_name(g.user)
 
     # general settings
     if g.user:
@@ -122,27 +173,75 @@ def identify_user():
     g.author = text_type(g.author)
 
 
+def _get_remote_user_content():
+
+    parts = six.ensure_text(
+        request.environ.get(u'REMOTE_USER', u'')).split(u',')
+
+    if len(parts) == 1:
+        # Tests can pass just a user name or id
+        return parts[0], None
+    elif len(parts) == 2:
+        # Standard auth cookie format: user_id,serial_counter
+        return parts[0], int(parts[1])
+    else:
+        # Something went wrong, don't authenticate
+        return None, None
+
+
+def _logout_user():
+
+    environ = request.environ
+    if u'repoze.who.plugins' in environ:
+        path = getattr(
+            environ[u'repoze.who.plugins'][u'friendlyform'],
+            u'logout_handler_path'
+        )
+        return redirect(path)
+
+
 def _identify_user_default():
     u'''
     Identifies the user using two methods:
     a) If they logged into the web interface then repoze.who will
-       set REMOTE_USER.
+       set REMOTE_USER  (this can also be set manually in tests).
     b) For API calls they may set a header with an API key.
     '''
 
-    # environ['REMOTE_USER'] is set by repoze.who if it authenticates a
-    # user's cookie. But repoze.who doesn't check the user (still) exists
-    # in our database - we need to do that here. (Another way would be
-    # with an userid_checker, but that would mean another db access.
-    # See: http://docs.repoze.org/who/1.0/narr.html#module-repoze.who\
-    # .plugins.sql )
-    g.user = request.environ.get(u'REMOTE_USER', u'')
-    if g.user:
-        g.user = g.user.decode(u'utf8')
-        g.userobj = model.User.by_name(g.user)
+    # environ['REMOTE_USER'] can be set:
+    #   1. By repoze.who if it authenticates a user's cookie (a standard
+    #      browser request). This has the format user_id,serial_counter
+    #   2. Manually in tests when passing `extra_environ` to a test client
+    #      request. This can have just the user name or id
+    # But repoze.who doesn't check the user (still) exists in the database,
+    # we need to do that here.
+    g.user = u''
 
-        if g.userobj is None or not g.userobj.is_active():
+    user_id, serial_counter = _get_remote_user_content()
 
+    if user_id:
+
+        if request.environ.get(u'CKAN_TESTING'):
+            # For requests coming from the test client we allow users to be
+            # identified either by user name or id
+            g.userobj = model.User.get(user_id)
+
+            # Serial counter is optional in tests
+            if serial_counter is not None and int(serial_counter) != 1:
+                return _logout_user()
+
+        else:
+            # For normal, browser cookie based requests we enforce that the
+            # user is identified by its id
+            g.userobj = model.Session.query(model.User).filter_by(
+                id=user_id).first()
+
+            if serial_counter is None or int(serial_counter) != 1:
+                return _logout_user()
+
+        if g.userobj is not None and g.userobj.is_active():
+            g.user = g.userobj.name
+        else:
             # This occurs when a user that was still logged in is deleted, or
             # when you are logged in, clean db and then restart (or when you
             # change your username). There is no user object, so even though
@@ -150,11 +249,8 @@ def _identify_user_default():
             # ckan_display_name, we need to force user to logout and login
             # again to get the User object.
 
-            ev = request.environ
-            if u'repoze.who.plugins' in ev:
-                pth = getattr(ev[u'repoze.who.plugins'][u'friendlyform'],
-                              u'logout_handler_path')
-                redirect(pth)
+            return _logout_user()
+
     else:
         g.userobj = _get_user_for_apikey()
         if g.userobj is not None:
@@ -177,19 +273,62 @@ def _get_user_for_apikey():
             apikey = u''
     if not apikey:
         return None
-    apikey = apikey.decode(u'utf8', u'ignore')
+    apikey = six.ensure_text(apikey, errors=u"ignore")
     log.debug(u'Received API Key: %s' % apikey)
     query = model.Session.query(model.User)
     user = query.filter_by(apikey=apikey).first()
+
+    if not user:
+        user = api_token.get_user_from_token(apikey)
     return user
 
 
 def set_controller_and_action():
-    try:
-        controller, action = request.endpoint.split(u'.')
-    except ValueError:
-        log.debug(
-            u'Endpoint does not contain dot: {}'.format(request.endpoint)
-        )
-        controller = action = request.endpoint
-    g.controller, g.action = controller, action
+    g.controller, g.action = p.toolkit.get_endpoint()
+
+
+def handle_i18n(environ=None):
+    u'''
+    Strips the locale code from the requested url
+    (eg '/sk/about' -> '/about') and sets environ variables for the
+    language selected:
+
+        * CKAN_LANG is the language code eg en, fr
+        * CKAN_LANG_IS_DEFAULT is set to True or False
+        * CKAN_CURRENT_URL is set to the current application url
+    '''
+    environ = environ or request.environ
+    locale_list = get_locales_from_config()
+    default_locale = config.get(u'ckan.locale_default', u'en')
+
+    # We only update once for a request so we can keep
+    # the language and original url which helps with 404 pages etc
+    if u'CKAN_LANG' not in environ:
+        path_parts = environ[u'PATH_INFO'].split(u'/')
+        if len(path_parts) > 1 and path_parts[1] in locale_list:
+            environ[u'CKAN_LANG'] = path_parts[1]
+            environ[u'CKAN_LANG_IS_DEFAULT'] = False
+            # rewrite url
+            if len(path_parts) > 2:
+                environ[u'PATH_INFO'] = u'/'.join([u''] + path_parts[2:])
+            else:
+                environ[u'PATH_INFO'] = u'/'
+        else:
+            environ[u'CKAN_LANG'] = default_locale
+            environ[u'CKAN_LANG_IS_DEFAULT'] = True
+
+        set_ckan_current_url(environ)
+
+
+def set_ckan_current_url(environ):
+    # Current application url
+    path_info = environ[u'PATH_INFO']
+    # sort out weird encodings
+    path_info = \
+        u'/'.join(quote(pce, u'') for pce in path_info.split(u'/'))
+
+    qs = environ.get(u'QUERY_STRING')
+    if qs:
+        environ[u'CKAN_CURRENT_URL'] = u'%s?%s' % (path_info, qs)
+    else:
+        environ[u'CKAN_CURRENT_URL'] = path_info

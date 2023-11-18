@@ -160,24 +160,49 @@
       }
 
       var map = {};
+      // If given a 'result' array then convert it into a Result dict inside a Result dict.
+      // new syntax (not used until all browsers support arrow notation):
+      //data = data.result ? { 'ResultSet': { 'Result': data.result.map(x => ({'Name': x})) } } : data;
+      // compatible syntax:
+      data = data.result ? { 'ResultSet': { 'Result': data.result.map(function(val){ return { 'Name' :val } }) } } : data;
+      // If given a Result dict inside a ResultSet dict then use the Result dict.
       var raw = jQuery.isArray(data) ? data : data.ResultSet && data.ResultSet.Result || {};
 
       var items = jQuery.map(raw, function (item) {
         var key = typeof options.key != 'undefined' ? item[options.key] : false;
         var label = typeof options.label != 'undefined' ? item[options.label] : false;
 
+        let children = item.children;
         item = typeof item === 'string' ? item : item.name || item.Name || item.Format || '';
         item = jQuery.trim(item);
 
         key = key ? key : item;
         label = label ? label : item;
 
+        /* Having the "ID" mark an element as selectable
+           Group labels should not be selectable
+           Children should include its own IDs and TEXTs
+        */
+        let ret = {text: label};
+        if (children === undefined) {
+          // This is a regular element without children
+          ret.id = key;
+        } else {
+          // This is a group. Children need ID and TEXT
+          // "key" and "label" should be defined
+          for (i = 0, l = children.length; i < l; i = i + 1) {
+            children[i].id = children[i][options.key];
+            children[i].text = children[i][options.label];
+          }
+          ret.children = children;
+        }
+
         var lowercased = item.toLowerCase();
         var returnObject = options && options.objects === true;
 
         if (lowercased && !map[lowercased]) {
           map[lowercased] = 1;
-          return returnObject ? {id: key, text: label} : item;
+          return returnObject ? ret : item;
         }
 
         return null;

@@ -3,17 +3,15 @@
 ''' The application's Globals object '''
 
 import logging
-import time
 from threading import Lock
 import re
-
-from paste.deploy.converters import asbool
+import six
+from ckan.common import asbool
 from ckan.common import config
 
 import ckan
 import ckan.model as model
-import ckan.logic as logic
-from logic.schema import update_configuration_schema
+from ckan.logic.schema import update_configuration_schema
 
 
 log = logging.getLogger(__name__)
@@ -42,12 +40,11 @@ app_globals_from_config_details = {
         # has been setup in load_environment():
     'ckan.site_id': {},
     'ckan.recaptcha.publickey': {'name': 'recaptcha_publickey'},
-    'ckan.template_title_deliminater': {'default': '-'},
+    'ckan.template_title_delimiter': {'default': '-'},
     'ckan.template_head_end': {},
     'ckan.template_footer_end': {},
     'ckan.dumps_url': {},
     'ckan.dumps_format': {},
-    'ofs.impl': {'name': 'ofs_impl'},
     'ckan.homepage_style': {'default': '1'},
 
     # split string
@@ -74,6 +71,25 @@ app_globals_from_config_details = {
 
 # A place to store the origional config options of we override them
 _CONFIG_CACHE = {}
+
+def set_theme(asset):
+    ''' Sets the theme.
+    The `asset` argument is a name of existing web-asset registered by CKAN
+    itself or by any enabled extension.
+    If asset is not registered, use default theme instead.
+    '''
+    from ckan.lib.webassets_tools import env
+
+    assert env
+    if asset not in env:
+        log.error(
+            "Asset '%s' does not exist. Fallback to '%s'",
+            asset, 'css/main'
+        )
+        asset = 'css/main'
+
+    app_globals.theme = asset
+
 
 def set_main_css(css_file):
     ''' Sets the main_css.  The css_file must be of the form file.css '''
@@ -140,9 +156,9 @@ def reset():
             value = None
         config_value = config.get(key)
         # sort encodeings if needed
-        if isinstance(config_value, str):
+        if isinstance(config_value, str) and six.PY2:
             try:
-                config_value = config_value.decode('utf-8')
+                config_value = six.ensure_text(config_value)
             except UnicodeDecodeError:
                 config_value = config_value.decode('latin-1')
         # we want to store the config the first time we get here so we can
@@ -171,6 +187,9 @@ def reset():
         get_config_value(key)
 
     # custom styling
+    theme = get_config_value('ckan.theme') or 'css/main'
+    set_theme(theme)
+    # legacy -- preserve for extensinos
     main_css = get_config_value('ckan.main_css', '/base/css/main.css')
     set_main_css(main_css)
 

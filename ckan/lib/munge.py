@@ -11,7 +11,7 @@ import re
 from six import text_type
 
 from ckan import model
-from ckan.lib.io import decode_path
+from ckan.lib.io_ import decode_path
 
 # Maximum length of a filename's extension (including the '.')
 MAX_FILENAME_EXTENSION_LENGTH = 21
@@ -56,10 +56,10 @@ def munge_title_to_name(name):
     # (make length less than max, in case we need a few for '_' chars
     # to de-clash names.)
     if len(name) > max_length:
-        year_match = re.match('.*?[_-]((?:\d{2,4}[-/])?\d{2,4})$', name)
+        year_match = re.match(r'.*?[_-]((?:\d{2,4}[-/])?\d{2,4})$', name)
         if year_match:
             year = year_match.groups()[0]
-            name = '%s-%s' % (name[:(max_length-len(year)-1)], year)
+            name = '%s-%s' % (name[:(max_length - len(year) - 1)], year)
         else:
             name = name[:max_length]
     name = _munge_to_length(name, model.PACKAGE_NAME_MIN_LENGTH,

@@ -1,11 +1,13 @@
 # encoding: utf-8
 
 import datetime
-import urllib2
 import re
 
+import requests
+
 from ckan.common import config
-from paste.deploy.converters import asbool
+from ckan.common import asbool, asint
+import six
 from six import text_type, string_types
 
 from ckan.common import _, json
@@ -13,6 +15,7 @@ import ckan.lib.maintain as maintain
 
 log = __import__('logging').getLogger(__name__)
 
+TIMEOUT = asint(config.get('ckan.requests.timeout', 5))
 
 class License(object):
     """Domain object for a license."""
@@ -32,11 +35,14 @@ class License(object):
         for (key, value) in self._data.items():
             if key == 'date_created':
                 # Parse ISO formatted datetime.
-                value = datetime.datetime(*map(int, re.split('[^\d]', value)))
+                value = datetime.datetime(
+                    *list(int(item) for item in re.split(r'[^\d]', value)))
                 self._data[key] = value
             elif isinstance(value, str):
-                # Convert str to unicode (keeps Pylons and SQLAlchemy happy).
-                value = value.decode('utf8')
+                if six.PY2:
+                    # Convert str to unicode
+                    # (keeps Pylons and SQLAlchemy happy).
+                    value = six.ensure_text(value)
                 self._data[key] = value
 
     def __getattr__(self, name):
@@ -48,7 +54,12 @@ class License(object):
             log.warn('license.is_osi_compliant is deprecated - use '
                      'osd_conformance instead.')
             return self._data['osd_conformance'] == 'approved'
-        return self._data[name]
+        try:
+            return self._data[name]
+        except KeyError as e:
+            # Python3 strictly requires `AttributeError` for correct
+            # behavior of `hasattr`
+            raise AttributeError(*e.args)
 
     @maintain.deprecated("License.__getitem__() is deprecated and will be "
                          "removed in a future version of CKAN. Instead, "
@@ -116,21 +127,21 @@ class LicenseRegister(object):
 
     def load_licenses(self, license_url):
         try:
-            response = urllib2.urlopen(license_url)
-            response_body = response.read()
-        except Exception as inst:
-            msg = "Couldn't connect to licenses service %r: %s" % (license_url, inst)
+            if license_url.startswith('file://'):
+                with open(license_url.replace('file://', ''), 'r') as f:
+                    license_data = json.load(f)
+            else:
+                response = requests.get(license_url, timeout=TIMEOUT)
+                license_data = response.json()
+        except requests.RequestException as e:
+            msg = "Couldn't get the licenses file {}: {}".format(license_url, e)
             raise Exception(msg)
-        try:
-            license_data = json.loads(response_body)
-        except Exception as inst:
-            msg = "Couldn't read response from licenses service %r: %s" % (response_body, inst)
-            raise Exception(inst)
+        except ValueError as e:
+            msg = "Couldn't parse the licenses file {}: {}".format(license_url, e)
+            raise Exception(msg)
         for license in license_data:
             if isinstance(license, string_types):
                 license = license_data[license]
-            if license.get('title'):
-                license['title'] = _(license['title'])
         self._create_license_list(license_data, license_url)
 
     def _create_license_list(self, license_data, license_url=''):
@@ -210,7 +221,7 @@ class DefaultLicense(dict):
             else:
                 return value
         else:
-            raise KeyError()
+            raise KeyError(key)
 
     def copy(self):
         ''' create a dict of the license used by the licenses api '''

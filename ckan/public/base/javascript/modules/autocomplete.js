@@ -2,14 +2,15 @@
  * a list of terms from an API endpoint (provided using data-module-source).
  *
  * source   - A url pointing to an API autocomplete endpoint.
- * interval - The interval between requests in milliseconds (default: 1000).
+ * interval - The interval between requests in milliseconds (default: 300).
  * items    - The max number of items to display (default: 10)
  * tags     - Boolean attribute if true will create a tag input.
  * key      - A string of the key you want to be the form value to end up on
  *            from the ajax returned results
  * label    - A string of the label you want to appear within the dropdown for
  *            returned results
- *
+ * tokensep - A string that contains characters which will be interpreted
+ *            as separators for tags when typed or pasted (default ",").
  * Examples
  *
  *   // <input name="tags" data-module="autocomplete" data-module-source="http://" />
@@ -20,13 +21,16 @@ this.ckan.module('autocomplete', function (jQuery) {
     /* Options for the module */
     options: {
       tags: false,
+      createtags: true,
       key: false,
       label: false,
       items: 10,
       source: null,
+      tokensep: ',',
       interval: 300,
       dropdownClass: '',
-      containerClass: ''
+      containerClass: '',
+      minimumInputLength: 0
     },
 
     /* Sets up the module, binding methods, creating elements etc. Called
@@ -39,7 +43,7 @@ this.ckan.module('autocomplete', function (jQuery) {
       this.setupAutoComplete();
     },
 
-    /* Sets up the auto complete plugin.
+    /* Sets up the auto complete plugin. 
      *
      * Returns nothing.
      */
@@ -50,7 +54,9 @@ this.ckan.module('autocomplete', function (jQuery) {
         formatNoMatches: this.formatNoMatches,
         formatInputTooShort: this.formatInputTooShort,
         dropdownCssClass: this.options.dropdownClass,
-        containerCssClass: this.options.containerClass
+        containerCssClass: this.options.containerClass,
+        tokenSeparators: this.options.tokensep.split(''),
+        minimumInputLength: this.options.minimumInputLength
       };
 
       // Different keys are required depending on whether the select is
@@ -58,6 +64,13 @@ this.ckan.module('autocomplete', function (jQuery) {
       if (!this.el.is('select')) {
         if (this.options.tags) {
           settings.tags = this._onQuery;
+
+          // Disable creating new tags
+          if (!this.options.createtags) {
+            settings.createSearchChoice = function(params) {
+              return undefined;
+            }
+          }
         } else {
           settings.query = this._onQuery;
           settings.createSearchChoice = this.formatTerm;
@@ -143,10 +156,10 @@ this.ckan.module('autocomplete', function (jQuery) {
       // Kills previous timeout
       clearTimeout(this._debounced);
 
-      // OK, wipe the dropdown before we start ajaxing the completions
-      fn({results:[]});
-
-      if (string) {
+      if (!string) {
+        // Wipe the dropdown for empty calls.
+        fn({results:[]});
+      } else {
         // Set a timer to prevent the search lookup occurring too often.
         this._debounced = setTimeout(function () {
           var term = module._lastTerm;
@@ -175,15 +188,20 @@ this.ckan.module('autocomplete', function (jQuery) {
      *
      * Returns a text string.
      */
-    formatResult: function (state, container, query) {
-      var term = this._lastTerm || null; // same as query.term
+    formatResult: function (state, container, query, escapeMarkup) {
+      var term = this._lastTerm || (query ? query.term : null) || null; // same as query.term
 
       if (container) {
         // Append the select id to the element for styling.
         container.attr('data-value', state.id);
       }
 
-      return state.text.split(term).join(term && term.bold());
+      var result = [];
+      $(state.text.split(term)).each(function() {
+        result.push(escapeMarkup ? escapeMarkup(this) : this);
+      });
+
+      return result.join(term && (escapeMarkup ? escapeMarkup(term) : term).bold());
     },
 
     /* Formatter for the select2 plugin that returns a string used when
@@ -208,12 +226,6 @@ this.ckan.module('autocomplete', function (jQuery) {
       );
     },
 
-    /* Takes a string and converts it into an object used by the select2 plugin.
-     *
-     * term - The term to convert.
-     *
-     * Returns an object for use in select2.
-     */
     formatTerm: function (term) {
       term = jQuery.trim(term || '');
 
