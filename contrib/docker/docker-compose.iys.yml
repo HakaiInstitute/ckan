@@ -42,15 +42,20 @@ volumes:
   ckan_storage:
   pg_data:
   solr_data:
+  redis_data:
 
 
 
 services:
   ckan:
+    build:
+      context: ../../
+      args:
+        - CKAN_SITE_URL=${CKAN_SITE_URL}
     depends_on:
       - db
       - solr
-      # - redis
+      - redis
     <<: *ckan_app
     deploy:
       resources:
@@ -64,7 +69,7 @@ services:
      container_name: ckan_gather_harvester
      image: hakaiinstitute/ckan:iys_${CKAN_TAG}
      entrypoint: /ckan-harvester-entrypoint.sh
-     user: root
+     user: ckan
      command: ckan --config=/etc/ckan/production.ini harvester gather-consumer
      deploy:
        resources:
@@ -79,7 +84,7 @@ services:
      container_name: ckan_fetch_harvester
      image: hakaiinstitute/ckan:iys_${CKAN_TAG}
      entrypoint: /ckan-harvester-entrypoint.sh
-     user: root
+     user: ckan
      command: ckan --config=/etc/ckan/production.ini harvester fetch-consumer
      ports: []
      deploy:
@@ -141,17 +146,26 @@ services:
   solr:
     container_name: solr
     image: cioos/solr:latest
+    build:
+      context: ../../
+      dockerfile: contrib/docker/solr/Dockerfile
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: '${LIMIT_CPU_SOLR:-1.0}'
+    volumes:
+      - solr_data:/var/solr
 
   # redis is used by the datapusher and the spatial fetch and gather harvesters
   redis:
     container_name: redis
     image: redis:latest
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: '${LIMIT_CPU_REDIS:-0.25}'
+    volumes:
+      - redis_data:/data
     #restart: always
