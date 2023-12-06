@@ -80,7 +80,7 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         tags: |
-          hakaiinstitute/ckan:${{env.TAG}}
+          hakaiinstitute/ckan:mapp_${{env.TAG}}
 
     - if: github.event_name != 'pull_request'
       name: Build and push
@@ -91,8 +91,8 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         tags: |
-          hakaiinstitute/ckan:latest
-          hakaiinstitute/ckan:${{env.TAG}}
+          hakaiinstitute/ckan:mapp_latest
+          hakaiinstitute/ckan:mapp_${{env.TAG}}
 
     - if: github.event_name == 'pull_request'
       uses: mshick/add-pr-comment@v1
