@@ -270,8 +270,8 @@ export VOL_CKAN_HOME=`sudo docker volume inspect docker_ckan_home | jq -r -c '.[
 cd ~/ckan/contrib/docker/
 sudo docker exec -it ckan ckan generate config ./temp.ini
 
-sudo grep 'beaker.session.secret' $VOL_CKAN_HOME/venv/src/production.ini
-sudo grep 'app_instance_uuid' $VOL_CKAN_HOME/venv/src/production.ini
+sudo grep 'beaker.session.secret' $VOL_CKAN_HOME/venv/src/temp.ini
+sudo grep 'app_instance_uuid' $VOL_CKAN_HOME/venv/src/temp.ini
 ```
 then update the corosponing lines in production.ini
 

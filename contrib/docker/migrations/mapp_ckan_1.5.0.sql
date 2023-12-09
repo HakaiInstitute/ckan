@@ -1,7 +1,13 @@
+-- backup db
+sudo docker exec -u root -ti db /bin/bash -c "export TERM=xterm; exec bash"
+pg_dump -U ckan --format=custom -d ckan > /tmp/mapp_ckan.dump
+exit
+sudo docker cp db:/tmp/mapp_ckan.dump mapp_ckan.dump
+
 -- restore backup of db
-sudo docker-compose -f docker-compose.mapp.yml down
-sudo docker volume rm docker_pg_data
-sudo docker-compose -f docker-compose.mapp.yml up -d db
+-- sudo docker-compose -f docker-compose.mapp.yml down
+-- sudo docker volume rm docker_pg_data
+-- sudo docker-compose -f docker-compose.mapp.yml up -d db
 sudo docker cp mapp_ckan.dump db:/tmp/mapp_ckan.dump
 sudo docker exec -u root -ti db /bin/bash -c "export TERM=xterm; exec bash"
 
@@ -76,9 +82,12 @@ update package_extra
 
 
 -- once done reindex the packages
--- sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini search-index rebuild -r
+sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini search-index rebuild -r
 -- sudo docker exec -it ckan ckan  --config=/etc/ckan/production.ini harvester reindex
+
+sudo cp -r ./contrib/docker/production.ini $VOL_CKAN_CONFIG/production.ini
 
 
 -- Rename mapp harvester from 'mapp waf' to 'MaPP'
+
 
