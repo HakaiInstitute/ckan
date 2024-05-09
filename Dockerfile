@@ -115,8 +115,9 @@ RUN cd $SRC_DIR/ckanext-scheming && python3 setup.py install && python3 setup.py
 COPY ./contrib/docker/src/ckanext-fluent $SRC_DIR/ckanext-fluent
 RUN cd $SRC_DIR/ckanext-fluent && python3 setup.py install && python3 setup.py develop
 
-COPY ./contrib/docker/src/ckanext-pdfview $CKAN_VENV/src/ckanext-pdfview
-RUN /bin/bash -c "source $CKAN_VENV/bin/activate && cd $CKAN_VENV/src/ckanext-pdfview && python setup.py install && python setup.py develop"
+COPY ./contrib/docker/src/ckanext-pdfview $SRC_DIR/ckanext-pdfview
+RUN  cd $SRC_DIR/ckanext-pdfview && python3 setup.py install && python3 setup.py develop
+
 COPY ./contrib/docker/src/cioos-siooc-schema/cioos-siooc_schema.json  $SRC_DIR/ckanext-scheming/ckanext/scheming/cioos_siooc_schema.json
 COPY ./contrib/docker/src/cioos-siooc-schema/organization.json $SRC_DIR/ckanext-scheming/ckanext/scheming/
 COPY ./contrib/docker/src/cioos-siooc-schema/ckan_license.json $SRC_DIR/ckanext-scheming/ckanext/scheming/
