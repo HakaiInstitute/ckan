@@ -82,7 +82,8 @@ update package_extra
 
 
 -- once done reindex the packages
-sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini search-index rebuild -r
+-- sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini search-index rebuild -r
+sudo docker exec -it ckan ckan --config=/srv/app/ckan.ini search-index rebuild -r
 -- sudo docker exec -it ckan ckan  --config=/etc/ckan/production.ini harvester reindex
 
 sudo cp -r ./contrib/docker/production.ini $VOL_CKAN_CONFIG/production.ini
