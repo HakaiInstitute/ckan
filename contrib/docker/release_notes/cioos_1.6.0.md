@@ -26,6 +26,16 @@ ckan use is now 92 rather then 900. you will need to change log folders to be ow
 sudo chown -R 92:92 /var/log/ckan/
 ```
 
+
+You will need to allow execution of the entrypoint files so that docker can run them on container start
+
+```
+cd ~/ckan/contrib/docker
+chmod 775 ./ckan-entrypoint.sh
+chmod 775 ./ckan-harvester-entrypoint.sh
+chmod 775 ./ckan-run-harvester-entrypoint.sh
+```
+
 recreate ckan container
 ```
 ./clean_reload_ckan.sh
@@ -39,6 +49,8 @@ export VOL_CKAN_HOME=`sudo docker volume inspect docker_ckan_home | jq -r -c '.[
 export VOL_CKAN_STORAGE=`sudo docker volume inspect docker_ckan_storage | jq -r -c '.[] | .Mountpoint'`
 sudo chown -R 92:92 $VOL_CKAN_HOME $VOL_CKAN_STORAGE
 ```
+
+
 
 ### Note if building from source
 you can now use a cache for pip packages. if using docker-compose < 2 you will need to add enviroment variables to enable buildkit
