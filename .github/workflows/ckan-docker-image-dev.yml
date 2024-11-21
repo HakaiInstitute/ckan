@@ -18,7 +18,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: echo "TAG=PR${{ github.event.pull_request.number }}" >> $GITHUB_ENV
 
-      - run: docker run --rm -it lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} cioos/ckan:DEV_$TAG
+      - run: docker run --rm -it lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} hakaiinstitute/ckan:DEV_$TAG
 
   build_ckan:
     name: build ckan docker image
@@ -69,7 +69,7 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         tags: |
-          cioos/ckan:DEV_${{env.TAG}}
+          hakaiinstitute/ckan:DEV_${{env.TAG}}
 
     - if: github.event_name != 'pull_request'
       name: Build and push
@@ -80,17 +80,17 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         tags: |
-          cioos/ckan:DEV_latest
-          cioos/ckan:DEV_${{env.TAG}}
+          hakaiinstitute/ckan:DEV_latest
+          hakaiinstitute/ckan:DEV_${{env.TAG}}
 
     - if: github.event_name == 'pull_request'
       uses: mshick/add-pr-comment@v1
       with:
         message: |
-          Image has been pushed to [cioos/ckan](https://hub.docker.com/repository/docker/cioos/ckan)
+          Image has been pushed to [hakaiinstitute/ckan](https://hub.docker.com/repository/docker/hakaiinstitute/ckan)
           ## Testing Quick Start
           ### Pull image
-          `sudo docker pull cioos/ckan:DEV_${{ env.TAG }}`
+          `sudo docker pull hakaiinstitute/ckan:DEV_${{ env.TAG }}`
           or
           `sudo CKAN_TAG=DEV_${{ env.TAG }} docker-compose pull ckan`
           ### Remove Home Volume and Restart

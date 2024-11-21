@@ -26,7 +26,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: echo "TAG=PR${{ github.event.pull_request.number }}" >> $GITHUB_ENV
 
-      - run: docker run --rm -it lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} cioos/ckan:$TAG
+      - run: docker run --rm -it lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} hakaiinstitute/ckan:$TAG
 
   build_ckan:
     name: build ckan docker image
@@ -48,7 +48,6 @@ jobs:
     - run: cp ./contrib/docker/.env.template ./contrib/docker/.env
     - run: cp ./contrib/docker/production_root_url.ini ./contrib/docker/production.ini
     - run: cp ./contrib/docker/who_root_url.ini ./contrib/docker/who.ini
-    - run: cp ./contrib/docker/pycsw/pycsw.cfg.template ./contrib/docker/pycsw/pycsw.cfg
 
     - name: Set current date as TAG env variable for push requests
       if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -99,7 +98,7 @@ jobs:
       uses: mshick/add-pr-comment@v1
       with:
         message: |
-          Image has been pushed to [hakaiinstitute/ckan](https://hub.docker.com/repository/docker/cioos/ckan)
+          Image has been pushed to [hakaiinstitute/ckan](https://hub.docker.com/repository/docker/hakaiinstitute/ckan)
           ## Testing Quick Start
           ### Pull image
           `sudo docker pull hakaiinstitute/ckan:${{ env.TAG }}`
