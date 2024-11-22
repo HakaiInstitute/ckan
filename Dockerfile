@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------#
-FROM ckan/ckan-base:2.9 as base
+FROM ckan/ckan-base:2.9 AS base
 #------------------------------------------------------------------------------#
 
 ARG PROJ_VERSION=9.0.0
@@ -86,8 +86,11 @@ RUN --mount=type=cache,target=/root/.cache/pip cd $SRC_DIR && pip3 install -r ck
 
 
 #------------------------------------------------------------------------------#
-FROM base as extensions1
+FROM base AS extensions1
 #------------------------------------------------------------------------------#
+# remove docker-entrypoint.d becouse the base image tries to build it every time
+RUN rm -rf /docker-entrypoint.d
+
 WORKDIR $SRC_DIR
 
 COPY ./contrib/docker/src/ckanext-geoview $SRC_DIR/ckanext-geoview
@@ -108,6 +111,9 @@ RUN find . -maxdepth 1 ! -name 'ckanext*' ! -name '..' ! -name '.' ! -name 'easy
 #------------------------------------------------------------------------------#
 FROM base as extensions2
 #------------------------------------------------------------------------------#
+# remove docker-entrypoint.d becouse the base image tries to build it every time
+RUN rm -rf /docker-entrypoint.d
+
 WORKDIR $SRC_DIR
 
 COPY ./contrib/docker/src/ckanext-scheming $SRC_DIR/ckanext-scheming
@@ -128,8 +134,11 @@ WORKDIR /usr/lib/python3.9/site-packages/
 RUN find . -maxdepth 1 ! -name 'ckanext*' ! -name '..' ! -name '.' ! -name 'easy-install.pth' | xargs rm -R; mv easy-install.pth easy-install-B.pth
 
 #------------------------------------------------------------------------------#
-FROM base as harvest_extensions
+FROM base AS harvest_extensions
 #------------------------------------------------------------------------------#
+# remove docker-entrypoint.d becouse the base image tries to build it every time
+RUN rm -rf /docker-entrypoint.d
+
 WORKDIR $SRC_DIR
 
 COPY ./contrib/docker/src/ckanext-harvest $SRC_DIR/ckanext-harvest
@@ -145,8 +154,11 @@ WORKDIR /usr/lib/python3.9/site-packages/
 RUN find . -maxdepth 1 ! -name 'ckanext*' ! -name '..' ! -name '.' ! -name 'easy-install.pth' | xargs rm -R; mv easy-install.pth easy-install-C.pth
 
 #------------------------------------------------------------------------------#
-FROM base as cioos_extensions
+FROM base AS cioos_extensions
 #------------------------------------------------------------------------------#
+# remove docker-entrypoint.d becouse the base image tries to build it every time
+RUN rm -rf /docker-entrypoint.d
+
 WORKDIR $SRC_DIR
 COPY ./contrib/docker/src/ckanext-cioos_harvest $SRC_DIR/ckanext-cioos_harvest
 RUN cd $SRC_DIR/ckanext-cioos_harvest && python3 setup.py install && python3 setup.py develop
