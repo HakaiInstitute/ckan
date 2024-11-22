@@ -84,12 +84,12 @@ RUN --mount=type=cache,target=/root/.cache/pip cd $SRC_DIR && pip3 install -r ck
 COPY ./contrib/docker/src/ckanext-cioos_theme/requirements.txt $SRC_DIR/ckanext-cioos_theme/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip cd $SRC_DIR && pip3 install -r ckanext-cioos_theme/requirements.txt
 
+# remove directory so it can be re-added later
+RUN rm -rf /docker-entrypoint.d
 
 #------------------------------------------------------------------------------#
 FROM base AS extensions1
 #------------------------------------------------------------------------------#
-# remove docker-entrypoint.d becouse the base image tries to build it every time
-RUN rm -rf /docker-entrypoint.d
 
 WORKDIR $SRC_DIR
 
@@ -111,8 +111,6 @@ RUN find . -maxdepth 1 ! -name 'ckanext*' ! -name '..' ! -name '.' ! -name 'easy
 #------------------------------------------------------------------------------#
 FROM base as extensions2
 #------------------------------------------------------------------------------#
-# remove docker-entrypoint.d becouse the base image tries to build it every time
-RUN rm -rf /docker-entrypoint.d
 
 WORKDIR $SRC_DIR
 
@@ -136,8 +134,6 @@ RUN find . -maxdepth 1 ! -name 'ckanext*' ! -name '..' ! -name '.' ! -name 'easy
 #------------------------------------------------------------------------------#
 FROM base AS harvest_extensions
 #------------------------------------------------------------------------------#
-# remove docker-entrypoint.d becouse the base image tries to build it every time
-RUN rm -rf /docker-entrypoint.d
 
 WORKDIR $SRC_DIR
 
@@ -156,8 +152,6 @@ RUN find . -maxdepth 1 ! -name 'ckanext*' ! -name '..' ! -name '.' ! -name 'easy
 #------------------------------------------------------------------------------#
 FROM base AS cioos_extensions
 #------------------------------------------------------------------------------#
-# remove docker-entrypoint.d becouse the base image tries to build it every time
-RUN rm -rf /docker-entrypoint.d
 
 WORKDIR $SRC_DIR
 COPY ./contrib/docker/src/ckanext-cioos_harvest $SRC_DIR/ckanext-cioos_harvest
