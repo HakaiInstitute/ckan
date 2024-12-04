@@ -163,6 +163,13 @@ with the form `ckan-X.Y` -->
     <field name="datacentre" type="string" indexed="true" stored="true" multiValued="true" />
     <field name="included_in_data_catalogue" type="string" indexed="true" stored="true"
       multiValued="true" />
+    <field name="metadata-point-of-contact" type="string" indexed="true" stored="true"
+      multiValued="true" />
+    <field name="cited-responsible-party" type="string" indexed="true" stored="true"
+      multiValued="true" />
+    <field name="distributor" type="string" indexed="true" stored="true"
+      multiValued="true" />
+      
 
     <field name="bbox_area" type="float" indexed="true" stored="true" />
     <field name="maxx" type="float" indexed="true" stored="true" />
@@ -202,6 +209,8 @@ with the form `ckan-X.Y` -->
     <field name="maintainer_email" type="text_general" indexed="true" stored="true" /> -->
     <!-- <field name="license" type="string" indexed="true" stored="true" /> -->
     <field name="license_id" type="string" indexed="true" stored="true" />
+    <field name="license_url" type="string" indexed="true" stored="true" />
+    <field name="license_title" type="string" indexed="true" stored="true" />
     <field name="tags" type="text_general" indexed="true" stored="true" multiValued="true" />
     <field name="tags_en" type="string" indexed="true" stored="true" multiValued="true" />
     <field name="tags_fr" type="string" indexed="true" stored="true" multiValued="true" />
@@ -228,8 +237,8 @@ with the form `ckan-X.Y` -->
     <field name="res_url" type="string" indexed="true" stored="true" multiValued="true" />
     <field name="res_type" type="string" indexed="true" stored="true" multiValued="true" />
 
-    <field name="harvest_document_content" type="xml" indexed="false" stored="true"
-      multiValued="false" />
+    <!-- <field name="harvest_document_content" type="xml" indexed="false" stored="true"
+      multiValued="false" /> -->
     <!-- <field name="harvest_document_content_en" type="xml" indexed="true" stored="false"
       multiValued="false" />
     <field name="harvest_document_content_fr" type="xml" indexed="true" stored="false"
@@ -286,6 +295,9 @@ with the form `ckan-X.Y` -->
   <solrQueryParser defaultOperator="AND" /> -->
 
   <copyField source="url" dest="urls" />
+  <copyField source="license_id" dest="text" />
+  <copyField source="license_url" dest="text" />
+  <copyField source="license_title" dest="text" />
   <!-- <copyField source="title" dest="title_ngram" /> -->
   <copyField source="name" dest="name_ngram" />
   <copyField source="ckan_url" dest="urls" />
@@ -296,7 +308,9 @@ with the form `ckan-X.Y` -->
   <!-- <copyField source="res_extras_*" dest="text" /> -->
   <!-- <copyField source="vocab_*" dest="text" /> -->
   <copyField source="urls" dest="text" />
-  <copyField source="license" dest="text" />
+  <copyField source="license_id" dest="text" />
+  <copyField source="license_url" dest="text" />
+  <copyField source="license_title" dest="text" />
   <copyField source="res_name" dest="text" />
   <copyField source="res_description" dest="text" />
   <!-- <copyField source="harvest_document_content" dest="text" /> -->
@@ -306,22 +320,30 @@ with the form `ckan-X.Y` -->
 
 
   <copyField source="urls" dest="text_en" />
-  <copyField source="license" dest="text_en" />
+  <copyField source="license_id" dest="text_en" />
+  <copyField source="license_url" dest="text_en" />
+  <copyField source="license_title" dest="text_en" />
   <copyField source="res_name" dest="text_en" />
   <copyField source="res_description" dest="text_en" />
-  <copyField source="harvest_document_content_en" dest="text_en" />
+  <!-- <copyField source="harvest_document_content_en" dest="text_en" /> -->
   <copyField source="projects" dest="text_en" />
   <copyField source="eov" dest="text_en" />
   <copyField source="ecv" dest="text_en" />
   <copyField source="*_en" dest="text_en" />
+  <copyField source="metadata-point-of-contact" dest="text_en" />
+  <copyField source="cited-responsible-party" dest="text_en" />
 
   <copyField source="urls" dest="text_fr" />
-  <copyField source="license" dest="text_fr" />
+  <copyField source="license_id" dest="text_fr" />
+  <copyField source="license_url" dest="text_fr" />
+  <copyField source="license_title" dest="text_fr" />
   <copyField source="res_name" dest="text_fr" />
   <copyField source="res_description" dest="text_fr" />
-  <copyField source="harvest_document_content_fr" dest="text_en" />
+  <!-- <copyField source="harvest_document_content_fr" dest="text_en" /> -->
   <copyField source="projects" dest="text_fr" />
   <copyField source="eov" dest="text_fr" />
   <copyField source="ecv" dest="text_fr" />
   <copyField source="*_fr" dest="text_fr" />
+  <copyField source="metadata-point-of-contact" dest="text_fr" />
+  <copyField source="cited-responsible-party" dest="text_fr" />
 </schema>
