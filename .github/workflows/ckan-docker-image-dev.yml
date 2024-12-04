@@ -18,7 +18,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: echo "TAG=PR${{ github.event.pull_request.number }}" >> $GITHUB_ENV
 
-      - run: docker run --rm -it lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} hakaiinstitute/ckan:DEV_$TAG
+      - run: docker run --rm -i lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} hakaiinstitute/ckan:DEV_$TAG
 
   build_ckan:
     name: build ckan docker image
