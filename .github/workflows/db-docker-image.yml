@@ -1,6 +1,11 @@
 name: DB Docker Image
 
 on:
+  push:
+    branches:
+      - hakai_master
+    paths:
+      - "contrib/docker/postgresql/**"
   workflow_dispatch:
 
 jobs:

@@ -161,7 +161,7 @@ services:
 
   db:
     container_name: db
-    image: cioos/postgresql:latest
+    image: hakaiinstitute/postgresql:latest
     ports:
        - "5432:5432"
     environment:
@@ -183,7 +183,7 @@ services:
 
   solr:
     container_name: solr
-    image: cioos/solr:latest
+    image: hakaiinstitute/solr:latest
     build:
       context: ../../
       dockerfile: contrib/docker/solr/Dockerfile

@@ -1,6 +1,11 @@
 name: Solr Docker Image
 
 on:
+  push:
+    branches:
+      - hakai_master
+    paths:
+      - "ckan/config/solr/**"
   workflow_dispatch:
 
 jobs:
