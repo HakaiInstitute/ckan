@@ -166,6 +166,10 @@ services:
       - "8983:8983"
     volumes:
       - solr_data:/var/solr
+    logging:
+      options:
+        max-size: "100m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/ckan/admin/ping?wt=json |  grep -iq '\"status\":\"OK\"' || exit 1"]
       start_period: 15s
