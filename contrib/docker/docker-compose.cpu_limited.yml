@@ -183,7 +183,7 @@ services:
 
   solr:
     container_name: solr
-    image: cioos/solr:latest
+    image: hakaiinstitute/solr:latest
     build:
       context: ../../
       dockerfile: contrib/docker/solr/Dockerfile

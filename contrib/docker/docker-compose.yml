@@ -157,10 +157,7 @@ services:
 
   solr:
     container_name: solr
-    image: cioos/solr:latest
-    build:
-      context: ../../
-      dockerfile: contrib/docker/solr/Dockerfile
+    image: hakaiinstitute/solr:latest
     restart: unless-stopped
     ports:
       - "8983:8983"
