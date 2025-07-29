@@ -132,12 +132,18 @@ services:
 
   solr:
     container_name: solr
-    image: cioos/solr:latest
+    image: hakaiinstitute/solr:latest
     build:
       context: ../../
       dockerfile: contrib/docker/solr/Dockerfile
+    environment:
+      - SOLR_LOG_LEVEL=WARN
     volumes:
       - solr_data:/var/solr
+    logging:
+      options:
+        max-size: "100m"
+        max-file: "3"
     #restart: always
 
   redis:

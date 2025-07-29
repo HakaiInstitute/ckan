@@ -157,15 +157,18 @@ services:
 
   solr:
     container_name: solr
-    image: cioos/solr:latest
-    build:
-      context: ../../
-      dockerfile: contrib/docker/solr/Dockerfile
+    image: hakaiinstitute/solr:latest
     restart: unless-stopped
     ports:
       - "8983:8983"
+    environment:
+      - SOLR_LOG_LEVEL=WARN
     volumes:
       - solr_data:/var/solr
+    logging:
+      options:
+        max-size: "100m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/ckan/admin/ping?wt=json |  grep -iq '\"status\":\"OK\"' || exit 1"]
       start_period: 15s
