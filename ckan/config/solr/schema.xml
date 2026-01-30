@@ -169,7 +169,8 @@ with the form `ckan-X.Y` -->
       multiValued="true" />
     <field name="distributor" type="string" indexed="true" stored="true"
       multiValued="true" />
-      
+    <field name="lineage" type="string" indexed="true" stored="true"
+      multiValued="true" />
 
     <field name="bbox_area" type="float" indexed="true" stored="true" />
     <field name="maxx" type="float" indexed="true" stored="true" />
