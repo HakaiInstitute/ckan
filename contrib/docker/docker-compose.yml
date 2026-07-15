@@ -44,7 +44,7 @@ services:
       - "/etc/localtime:/etc/localtime:ro" # remove and use TZ setting if running on windows
       - ckan_home:/srv/app
       - ckan_storage:/var/lib/ckan
-      - ${CKAN_LOG_PATH}:/srv/app/logs
+      # - ${CKAN_LOG_PATH}:/srv/app/logs
       - ./ckan-entrypoint.sh:/docker-entrypoint.d/ckan-entrypoint.sh
     depends_on:
       db:

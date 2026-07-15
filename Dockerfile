@@ -36,12 +36,12 @@ RUN --mount=type=cache,target=/root/.cache/pip apk add --no-cache .build-deps li
     && for i in /build_proj/usr/lib/*; do strip -s $i 2>/dev/null || /bin/true; done \
     && for i in /build_proj/usr/bin/*; do strip -s $i 2>/dev/null || /bin/true; done \
     && apk del cmake \
-    && pip3 install pyproj==3.6.1 --no-cache-dir \
-    && pip3 install gdal==3.4.3 --no-cache-dir \
-    && pip3 install ckanapi --no-cache-dir \
-    && pip3 install -U requests[security] --no-cache-dir \
+    && pip3 install pyproj==3.6.1 \
+    && pip3 install gdal==3.4.3 \
+    && pip3 install ckanapi \
+    && pip3 install -U requests[security] \
     # for debugging
-    && pip3 install 'flask_debugtoolbar==0.14.1' --no-cache-dir \
+    && pip3 install 'flask_debugtoolbar==0.14.1' \
     # clean up
     && apk del .build-deps
 
@@ -56,18 +56,14 @@ ENV CKAN_STORAGE_PATH=/var/lib/ckan
 RUN ln -s SRC_DIR/ckan/bin/ckan /usr/local/bin/ckan
 
 # Setup CKAN
-ADD ./contrib/docker/who.ini $APP_DIR/who.ini
+COPY ./contrib/docker/who.ini $APP_DIR/who.ini
+COPY ./contrib/docker/production.ini $CKAN_INI
+COPY ./contrib/docker/crontab $SRC_DIR/ckan/contrib/docker/crontab
+COPY ./contrib/docker/wait-for-postgres.sh /wait-for-postgres.sh
 
-# Copy files to container
-ADD ./contrib/docker/production.ini $CKAN_INI
-ADD ./contrib/docker/crontab $SRC_DIR/ckan/contrib/docker/crontab
-ADD ./contrib/docker/wait-for-postgres.sh /wait-for-postgres.sh
-
-# Set file permissions
-RUN chmod +x /wait-for-postgres.sh
-
-# Copy extensions into container and Install
-RUN  chown -R ckan:ckan $APP_DIR $CKAN_STORAGE_PATH
+RUN chmod +x /wait-for-postgres.sh \
+    && chown -R ckan:ckan $APP_DIR $CKAN_STORAGE_PATH \
+    && rm -rf /docker-entrypoint.d
 
 COPY ./contrib/docker/src/ckanext-dcat/requirements.txt $SRC_DIR/ckanext-dcat/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip cd $SRC_DIR && pip3 install -r ckanext-dcat/requirements.txt
@@ -83,9 +79,7 @@ RUN --mount=type=cache,target=/root/.cache/pip cd $SRC_DIR && pip3 install -r ck
 
 COPY ./contrib/docker/src/ckanext-cioos_theme/requirements.txt $SRC_DIR/ckanext-cioos_theme/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip cd $SRC_DIR && pip3 install -r ckanext-cioos_theme/requirements.txt
-
-# remove directory so it can be re-added later
-RUN rm -rf /docker-entrypoint.d
+RUN --mount=type=cache,target=/root/.cache/pip pip3 install -r $SRC_DIR/ckanext-cioos_theme/requirements.txt
 
 #------------------------------------------------------------------------------#
 FROM base AS extensions1
@@ -183,11 +177,10 @@ COPY --from=cioos_extensions /usr/lib/python3.9/site-packages/ /usr/lib/python3.
 
 RUN sort -u /usr/lib/python3.9/site-packages/easy-install-[ABCD].pth > /usr/lib/python3.9/site-packages/easy-install.pth
 
-RUN mkdir -p $APP_DIR/logs
-RUN touch "$APP_DIR/logs/ckan_access.log"
-RUN touch "$APP_DIR/logs/ckan_default.log"
-
-RUN chown -R 92:92 $APP_DIR $CKAN_STORAGE_PATH
+RUN mkdir -p $APP_DIR/logs \
+    && touch "$APP_DIR/logs/ckan_access.log" \
+    && touch "$APP_DIR/logs/ckan_default.log" \
+    && chown -R 92:92 $APP_DIR $CKAN_STORAGE_PATH
 
 WORKDIR $APP_DIR
 

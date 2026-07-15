@@ -26,7 +26,7 @@ x-ckan: &ckan_app
     - "/etc/localtime:/etc/localtime:ro" # remove and use TZ setting if running on windows
     - ckan_home:/srv/app
     - ckan_storage:/var/lib/ckan
-    - ${CKAN_LOG_PATH}:/srv/app/logs
+    # - ${CKAN_LOG_PATH}:/srv/app/logs
 
 volumes:
   ckan_home:
