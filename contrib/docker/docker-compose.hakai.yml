@@ -26,7 +26,7 @@ x-ckan: &ckan_app
     - "/etc/localtime:/etc/localtime:ro" # remove and use TZ setting if running on windows
     - ckan_home:/srv/app
     - ckan_storage:/var/lib/ckan
-    - ${CKAN_LOG_PATH}:/srv/app/logs
+    # - ${CKAN_LOG_PATH}:/srv/app/logs
 
 volumes:
   ckan_home:
@@ -65,6 +65,8 @@ services:
       interval: 60s
       timeout: 5s
       retries: 5  
+    networks:
+      - proxynet
 
   ckan_gather_harvester:
     <<: *ckan_app
@@ -91,6 +93,8 @@ services:
     depends_on:
       ckan:
         condition: service_healthy      
+    networks:
+      - proxynet
 
   ckan_fetch_harvester:
     <<: *ckan_app
@@ -119,6 +123,8 @@ services:
         condition: service_healthy
       ckan_gather_harvester:
         condition: service_started
+    networks:
+      - proxynet
 
   ckan_run_harvester:
     <<: *ckan_app
@@ -147,6 +153,8 @@ services:
         condition: service_started
       ckan_fetch_harvester:
         condition: service_started
+    networks:
+      - proxynet
 
   # datapusher:
   #   container_name: datapusher
@@ -161,7 +169,7 @@ services:
 
   db:
     container_name: db
-    image: cioos/postgresql:latest
+    image: hakaiinstitute/postgresql:latest
     ports:
        - "5432:5432"
     environment:
@@ -180,6 +188,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - proxynet
 
   solr:
     container_name: solr
@@ -208,6 +218,8 @@ services:
       interval: 60s
       timeout: 5s
       retries: 3
+    networks:
+      - proxynet
 
   # redis is used by the datapusher and the spatial fetch and gather harvesters
   redis:
@@ -225,3 +237,10 @@ services:
       interval: 60s
       timeout: 3s
       retries: 5
+    networks:
+      - proxynet
+
+networks:
+  proxynet:
+    external: true
+    name: turnstile_proxy_network

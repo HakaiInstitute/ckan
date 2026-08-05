@@ -67,7 +67,7 @@ services:
     container_name: ckan_gather_harvester
     entrypoint: /ckan-harvester-entrypoint.sh
     user: ckan
-    command: ckan --config=/etc/ckan/production.ini harvester gather-consumer
+    command: ckan --config=/srv/app/ckan.ini harvester gather-consumer
     ports: []
     # ports:
     #  - "5678:5678" # used by the debugger during development. NOT for production
@@ -82,7 +82,7 @@ services:
     container_name: ckan_fetch_harvester
     entrypoint: /ckan-harvester-entrypoint.sh
     user: ckan
-    command: ckan --config=/etc/ckan/production.ini harvester fetch-consumer
+    command: ckan --config=/srv/app/ckan.ini harvester fetch-consumer
     ports: []
     depends_on:
       - ckan
@@ -91,10 +91,13 @@ services:
   ckan_run_harvester:
     <<: *ckan_app
     container_name: ckan_run_harvester
-    entrypoint: /ckan-run-harvester-entrypoint.sh
+    entrypoint: /docker-entrypoint.d/ckan-run-harvester-entrypoint.sh
     user: root
     command: /bin/bash -c "echo 'ckan_run_harvester started' && cron -f 2>&1 "
     ports: []
+    volumes:
+    - ckan_home:/srv/app
+    - ./ckan-run-harvester-entrypoint.sh:/docker-entrypoint.d/ckan-run-harvester-entrypoint.sh
     depends_on:
       - ckan
       - ckan_gather_harvester
@@ -129,12 +132,18 @@ services:
 
   solr:
     container_name: solr
-    image: cioos/solr:latest
+    image: hakaiinstitute/solr:latest
     build:
       context: ../../
       dockerfile: contrib/docker/solr/Dockerfile
+    environment:
+      - SOLR_LOG_LEVEL=WARN
     volumes:
       - solr_data:/var/solr
+    logging:
+      options:
+        max-size: "100m"
+        max-file: "3"
     #restart: always
 
   redis:

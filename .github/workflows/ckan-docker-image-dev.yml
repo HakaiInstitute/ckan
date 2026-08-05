@@ -1,4 +1,4 @@
-name: CKAN Docker Image
+name: CKAN Docker Dev Image
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: echo "TAG=PR${{ github.event.pull_request.number }}" >> $GITHUB_ENV
 
-      - run: docker run --rm -it lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} cioos/ckan:DEV_$TAG
+      - run: docker run --rm -i lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} hakaiinstitute/ckan:DEV_$TAG
 
   build_ckan:
     name: build ckan docker image
@@ -51,26 +51,46 @@ jobs:
       if: github.event_name == 'release'
       run: echo "TAG=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
     - name: Login to DockerHub
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
-    - uses: satackey/action-docker-layer-caching@v0.0.11
-      # Ignore the failure of a step and avoid terminating the job.
-      continue-on-error: true
-    - run: docker build -t cioos/ckan:DEV_$TAG -t cioos/ckan:DEV_latest .
-    - run: docker push cioos/ckan:DEV_$TAG
-    - if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-      run: docker push cioos/ckan:DEV_latest
+
+    - if: github.event_name == 'pull_request'
+      name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        tags: |
+          hakaiinstitute/ckan:DEV_${{env.TAG}}
+
+    - if: github.event_name != 'pull_request'
+      name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        tags: |
+          hakaiinstitute/ckan:DEV_latest
+          hakaiinstitute/ckan:DEV_${{env.TAG}}
+
     - if: github.event_name == 'pull_request'
       uses: mshick/add-pr-comment@v1
       with:
         message: |
-          Image has been pushed to [cioos/ckan](https://hub.docker.com/repository/docker/cioos/ckan)
+          Image has been pushed to [hakaiinstitute/ckan](https://hub.docker.com/repository/docker/hakaiinstitute/ckan)
           ## Testing Quick Start
           ### Pull image
-          `sudo docker pull cioos/ckan:DEV_${{ env.TAG }}`
+          `sudo docker pull hakaiinstitute/ckan:DEV_${{ env.TAG }}`
           or
           `sudo CKAN_TAG=DEV_${{ env.TAG }} docker-compose pull ckan`
           ### Remove Home Volume and Restart
