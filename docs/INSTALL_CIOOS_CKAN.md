@@ -3,7 +3,10 @@
 - [Setup CKAN](#setup-ckan)
   - [Linux](#linux)
     - [Install Docker](#install-docker)
-    - [Install docker-compose](#install-docker-compose)
+      - [Install latest docker-compose](#install-latest-docker-compose)
+      - [Install Apache](#install-apache)
+      - [Add Apache modules](#add-apache-modules)
+      - [Add noindex robot tags to headers](#add-noindex-robot-tags-to-headers)
   - [Windows](#windows)
     - [Docker Desktop + WSL Integration](#docker-desktop--wsl-integration)
     - [Windows Terminal](#windows-terminal)
@@ -14,25 +17,27 @@
     - [Configuring pyCSW](#configuring-pycsw)
   - [Build CKAN](#build-ckan)
     - [Create CKAN admin user](#create-ckan-admin-user)
+    - [Update shared secrets and app uuid](#update-shared-secrets-and-app-uuid)
   - [Configure admin settings](#configure-admin-settings)
   - [Setup Apache proxy](#setup-apache-proxy)
-    - [Install Apache](#install-apache)
+    - [Install Apache](#install-apache-1)
     - [Enable Compression in Apache](#enable-compression-in-apache)
     - [Configure Proxy Settings](#configure-proxy-settings)
     - [Redirect HTTP to HTTPS](#redirect-http-to-https)
     - [Mitigate SELinux Problems](#mitigate-selinux-problems)
     - [Restart Apache](#restart-apache)
+    - [Enable sitemap generation](#enable-sitemap-generation)
   - [Setup Harvesters](#setup-harvesters)
     - [CSW (geonetwork)](#csw-geonetwork)
     - [WAF (ERDDAP)](#waf-erddap)
     - [19115-3 WAF (ERDDAP)](#19115-3-waf-erddap)
     - [CKAN](#ckan)
     - [Reindex Harvesters](#reindex-harvesters)
-  - [Finish setting up pyCSW](#finish-setting-up-pycsw)
-    - [Test GetCapabilities](#test-getcapabilities)
-    - [Useful pyCSW commands](#useful-pycsw-commands)
-    - [Errors while pyCSW loading](#errors-while-pycsw-loading)
+  - [Export Logs from CKAN](#export-logs-from-ckan)
+  - [Setup fail2ban on host](#setup-fail2ban-on-host)
   - [Update SOLR schema](#update-solr-schema)
+    - [OLD METHOD](#old-method)
+    - [NEW Method](#new-method)
   - [Update CKAN](#update-ckan)
   - [Update CKAN extensions](#update-ckan-extensions)
   - [Other helpful commands](#other-helpful-commands)
@@ -42,7 +47,9 @@
     - [Get public IP of server](#get-public-ip-of-server)
     - [Update language translation files](#update-language-translation-files)
     - [Add DHCP entries to docker container](#add-dhcp-entries-to-docker-container)
+    - [build project using docker hub images](#build-project-using-docker-hub-images)
     - [Reindex if project was already installed / running](#reindex-if-project-was-already-installed--running)
+    - [change selinux permissions on web folders](#change-selinux-permissions-on-web-folders)
   - [Customize interface](#customize-interface)
   - [Enable Google Analytics](#enable-google-analytics)
   - [Troubleshooting](#troubleshooting)
@@ -60,6 +67,10 @@
     - [Build fails with 'Temporary failure resolving...' errors](#build-fails-with-temporary-failure-resolving-errors)
     - [Saving the admin config via the gui causes an internal server errors](#saving-the-admin-config-via-the-gui-causes-an-internal-server-errors)
     - [Error when Starting CKAN: "from osgeo import ogr ImportError: No module named osgeo"](#error-when-starting-ckan-from-osgeo-import-ogr-importerror-no-module-named-osgeo)
+    - [reseting the config](#reseting-the-config)
+      - [Generating an Authorization token](#generating-an-authorization-token)
+      - [Updating config settings using the CKAN API](#updating-config-settings-using-the-ckan-api)
+    - [Clearing a harvester crashes the site](#clearing-a-harvester-crashes-the-site)
 
 ## Linux
 
@@ -260,7 +271,7 @@ CKAN doesn't start with an admin user so it must be created via command line.  T
 You'll be asked to supply an email address and a password (8 characters in length minimum) and then to confirm the password.
 
 ```bash
-sudo docker exec -it ckan ckan --config /etc/ckan/production.ini sysadmin add admin
+sudo docker exec -it ckan ckan --config /srv/app/ckan.ini sysadmin add admin
 ```
 
 ### Update shared secrets and app uuid
@@ -407,7 +418,7 @@ sudo crontab -e
 ```
 
 ```crontab
-0 * * * * docker exec -it ckan ckan --config=/etc/ckan/production.ini sitemap create
+0 * * * * docker exec -it ckan ckan --config=/srv/app/ckan.ini sitemap create
 ```
 
 ## Setup Harvesters
@@ -560,7 +571,7 @@ It may become necessary to reindex harvesters, especially if they no longer repo
 > **NOTE:** If modifying the harvester config you will also need to reindex to make the new config take affect and restart the ckan_fetch_harvester container
 
 ```bash
-sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini harvester reindex
+sudo docker exec -it ckan ckan --config=/srv/app/ckan.ini harvester reindex
 cd ~/ckan/contrib/docker
 sudo docker-compose restart ckan_fetch_harvester
 ```
@@ -619,7 +630,7 @@ sudo docker-compose restart solr
 Rebuild search index
 
 ```bash
-sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini search-index rebuild -r
+sudo docker exec -it ckan ckan --config=/srv/app/ckan.ini search-index rebuild -r
 ```
 
 ### NEW Method
@@ -816,7 +827,7 @@ sudo timedatectl set-timezone America/Vancouver
 ### Flush email notifications
 
 ```bash
-sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckan post -c /etc/ckan/production.ini /api/action/send_email_notifications
+sudo docker exec -it ckan /usr/local/bin/ckan-paster --plugin=ckan post -c /srv/app/ckan.ini /api/action/send_email_notifications
 ```
 
 ### Get public IP of server
@@ -900,8 +911,8 @@ sudo docker-compose up -d
 ### Reindex if project was already installed / running
 
 ```bash
-sudo docker exec -it ckan ckan  --config=/etc/ckan/production.ini search-index rebuild
-sudo docker exec -it ckan ckan  --config=/etc/ckan/production.ini harvester reindex
+sudo docker exec -it ckan ckan  --config=/srv/app/ckan.ini search-index rebuild
+sudo docker exec -it ckan ckan  --config=/srv/app/ckan.ini harvester reindex
 ```
 
 ### change selinux permissions on web folders
@@ -1100,7 +1111,7 @@ sudo docker exec -u root -it ckan /bin/bash -c "export TERM=xterm; exec bash"
 If you rebuilt the ckan container and no records are showing up, you need to reindex the records.
 
 ```bash
-sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini search-index rebuild
+sudo docker exec -it ckan ckan --config=/srv/app/ckan.ini search-index rebuild
 ```
 
 ### Running out of hard drive space?
@@ -1144,7 +1155,7 @@ Delete and re clone the ckan repo.
 If you edit a harvester config and then reharvest the existing harvester will continue to use the in memory harvester config. To solve this you should reindex the harvesters and restart the harvester docker containers
 
 ```bash
-sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini harvester reindex
+sudo docker exec -it ckan ckan --config=/srv/app/ckan.ini harvester reindex
 sudo docker-compose restart ckan_run_harvester ckan_fetch_harvester ckan_gather_harvester
 ```
 
@@ -1210,7 +1221,7 @@ Substitute `[username]` with the username of the user you want to generate a tok
 Do not be surprised if the generated token is quite long.
 
 ```bash
-sudo docker exec -it ckan ckan --config /etc/ckan/production.ini user token add [username] [token_name]
+sudo docker exec -it ckan ckan --config /srv/app/ckan.ini user token add [username] [token_name]
 ```
 
 #### Updating config settings using the CKAN API

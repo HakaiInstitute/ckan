@@ -81,22 +81,22 @@ sudo docker-compose -f docker-compose.cpu_limited.yml --compatibility up -d
 # Upgrade the database and build web assets?
 
 ```
-sudo docker exec -it ckan ckan  --config=/etc/ckan/production.ini db upgrade
+sudo docker exec -it ckan ckan  --config=/srv/app/ckan.ini db upgrade
 
-sudo docker exec -it ckan ckan  --config=/etc/ckan/production.ini asset build
+sudo docker exec -it ckan ckan  --config=/srv/app/ckan.ini asset build
 ```
 
 # Rebuild indexes
 
 ```
-sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini search-index rebuild
+sudo docker exec -it ckan ckan --config=/srv/app/ckan.ini search-index rebuild
 
-sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini harvester reindex
+sudo docker exec -it ckan ckan --config=/srv/app/ckan.ini harvester reindex
 ```
 
 # Run this after updating ckan
 
 ```bash
 sudo cp -r ../../ckan/migration $VOL_CKAN_HOME/venv/src/ckan/
-sudo docker exec -u root -it ckan  /bin/bash -c "source ../bin/activate && python /usr/lib/ckan/venv/src/ckan/ckan/migration/migrate_package_activity.py -c /etc/ckan/production.ini"
+sudo docker exec -u root -it ckan  /bin/bash -c "source ../bin/activate && python /usr/lib/ckan/venv/src/ckan/ckan/migration/migrate_package_activity.py -c /srv/app/ckan.ini"
 ```

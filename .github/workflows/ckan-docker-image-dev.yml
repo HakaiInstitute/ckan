@@ -3,9 +3,9 @@ name: CKAN Docker Dev Image
 on:
   workflow_dispatch:
   push:
-   branches: [ cioos_dev]
+   branches: [ hakai_dev]
   pull_request:
-    branches: [ cioos_dev ]
+    branches: [ hakai_dev ]
 
 jobs:
   delete_pr:
