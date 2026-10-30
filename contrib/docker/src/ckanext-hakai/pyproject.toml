@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ckanext-hakai"
+version = "0.1.0"
+description = "Hakai/CIOOS customisations that used to live as patches inside vendored ckanext-* forks"
+license = "AGPL-3.0-or-later"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.entry-points."ckan.plugins"]
+hakai = "ckanext.hakai.plugin:HakaiPlugin"
+
+[tool.setuptools.packages.find]
+include = ["ckanext*"]
+
+[tool.setuptools.package-data]
+"ckanext.hakai" = [
+    "schemas/*.json",
+    "presets/*.json",
+    "templates/**/*.html",
+    "assets/**/*",
+]

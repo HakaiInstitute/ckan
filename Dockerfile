@@ -116,11 +116,20 @@ RUN pip3 install -e $SRC_DIR/ckanext-cioos_theme \
     && cd $SRC_DIR/ckanext-cioos_theme \
     && pybabel compile -d ckanext/cioos_theme/i18n -D ckanext-cioos_theme -l fr
 
-# Schemas are read at runtime from inside the scheming package directory.
-COPY ./contrib/docker/src/cioos-siooc-schema/cioos-siooc_schema.json $SRC_DIR/ckanext-scheming/ckanext/scheming/cioos_siooc_schema.json
-COPY ./contrib/docker/src/cioos-siooc-schema/organization.json $SRC_DIR/ckanext-scheming/ckanext/scheming/
-COPY ./contrib/docker/src/cioos-siooc-schema/ckan_license.json $SRC_DIR/ckanext-scheming/ckanext/scheming/
-COPY ./contrib/docker/src/cioos-siooc-schema/group.json $SRC_DIR/ckanext-scheming/ckanext/scheming/
+# ckanext-hakai holds the customisations that used to be patched into the
+# vendored forks. It must be installed after the extensions it overrides.
+COPY ./contrib/docker/src/ckanext-hakai $SRC_DIR/ckanext-hakai
+RUN pip3 install -e $SRC_DIR/ckanext-hakai
+
+# The CIOOS schemas are maintained in the cioos-siooc-schema submodule and
+# copied into ckanext-hakai's package directory, where scheming reads them as
+# `ckanext.hakai:schemas/<file>`. They used to be copied into ckanext-scheming's
+# own package directory and referenced as `ckanext.scheming:<file>`, which meant
+# scheming could never be a plain pinned dependency.
+COPY ./contrib/docker/src/cioos-siooc-schema/cioos-siooc_schema.json $SRC_DIR/ckanext-hakai/ckanext/hakai/schemas/cioos_siooc_schema.json
+COPY ./contrib/docker/src/cioos-siooc-schema/organization.json $SRC_DIR/ckanext-hakai/ckanext/hakai/schemas/
+COPY ./contrib/docker/src/cioos-siooc-schema/ckan_license.json $SRC_DIR/ckanext-hakai/ckanext/hakai/schemas/
+COPY ./contrib/docker/src/cioos-siooc-schema/group.json $SRC_DIR/ckanext-hakai/ckanext/hakai/schemas/
 
 #------------------------------------------------------------------------------#
 FROM ckan/ckan-base:${CKAN_BASE_TAG}
