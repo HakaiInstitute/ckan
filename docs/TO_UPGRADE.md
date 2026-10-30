@@ -1,3 +1,8 @@
+> **Historical.** This document describes the CKAN 2.8 → 2.9 upgrade and
+> refers to paths and commands that no longer exist (`who.ini`,
+> `/usr/lib/ckan/venv`, `ckan-paster`, `migrate_package_activity.py`).
+> For the 2.9 → 2.12 upgrade see [UPGRADE_2.9_TO_2.12.md](UPGRADE_2.9_TO_2.12.md).
+
 # BACKUP
 
 ```
