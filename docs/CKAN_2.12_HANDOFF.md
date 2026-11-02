@@ -6,6 +6,7 @@ separate document: [UPGRADE_2.9_TO_2.12.md](UPGRADE_2.9_TO_2.12.md).
 **Branch:** `ckan-2.12-upgrade` (off `hakai_master`), nothing pushed.
 
 ```
+f25a7d575  Phase 2: fold the three mapp_master branches into ckanext-mapp
 371ef543f  Phase 2: move the CIOOS-only harvest pieces into the cioos extensions
 adcd02f13  Phase 2: add ckanext-hakai and move the scheming/fluent patches into it
 81ce924ab  Upgrade CKAN 2.9 -> 2.12 (all but ckanext-spatial)
@@ -22,8 +23,9 @@ adcd02f13  Phase 2: add ckanext-hakai and move the scheming/fluent patches into 
 | dcat, geoview, pdfview | pinned upstream tags, no local delta |
 | fluent, scheming, harvest | merged with 2.12-tested upstreams |
 | cioos_theme, cioos_harvest, cioos-siooc-schema | ported |
+| ckanext-mapp | new — the three `mapp_master` branches folded into one extension |
 | **ckanext-spatial** | **not started** — blocks the full build |
-| Phase 2 (de-forking) | two slices done, more possible |
+| Phase 2 (de-forking) | three slices done, more possible |
 
 The image builds and **all plugins load on Python 3.14** when ckanext-spatial's
 two layers are removed. With spatial unported the real build fails at
@@ -169,6 +171,14 @@ Because the backend registry is closed, the clean seam is
 ordered **before** `spatial_query`, normalising geometry so spatial's own
 backend then indexes it unchanged.
 
+Nothing from `ckanext-spatial@mapp_master` needs to survive this merge. Its
+only real content was four `ISOElement`s for the MaPP vocabularies plus a
+`thesaurus` element on `ISOKeyword`; those now live in `ckanext-mapp`'s
+`harvest.py`, behind `ISpatialHarvester.get_package_dict`. The branch's other
+two hunks are already on `hakai_master` (the `geojsonlayerurls` case fix, the
+blank-`spatial` filter in `spatial_query.js`), and its `hide_header` flag on
+the spatial_query snippet was never used by any template.
+
 Also unmerged: `harvested_metadata.py` (1 hunk), `harvesters/base.py` (8),
 `harvesters/waf.py` (2), `lib/__init__.py` (3), `views.py` (2),
 `validation/validation.py` (1), 2 templates, `setup.py`, `requirements.txt`.
@@ -179,12 +189,24 @@ Accept upstream's deletions of `controllers/api.py`, the `plugin/` package,
 
 Done so far: `ckanext-hakai` created (schemas + fluent presets + fluent_text
 template); CIOOS harvester → `ckanext-cioos_harvest`; harvest templates →
-`ckanext-cioos_theme`.
+`ckanext-cioos_theme`; `ckanext-mapp` created, retiring the three `mapp_master`
+branches (cioos_theme, spatial, cioos-siooc-schema).
 
 Guiding rule learned: **check whether a customisation exists on
 `upstream/cioos-siooc` but not `ckan/master`.** If so it is CIOOS-level and
 belongs in the shared cioos extensions (where it can be offered back to CIOOS),
 not in Hakai-only `ckanext-hakai`.
+
+Second rule, from the MaPP slice: **diff a site branch against its merge-base
+with the shared line, not against `hakai_master`.** Most of what
+`git log hakai_master..mapp_master` lists is CIOOS work that reached
+`hakai_master` by another route; the real site-specific delta in cioos_theme was
+12 files, and in spatial 4.
+
+### Other site branches
+
+`ckanext-cioos_theme` also has an `iys_master`. It was not touched here, but
+the same treatment would apply.
 
 Remaining:
 - **ckanext-harvest, 296 lines left.** `ckanharvester.py` (120) — the
