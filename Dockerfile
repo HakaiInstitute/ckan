@@ -121,6 +121,14 @@ RUN pip3 install -e $SRC_DIR/ckanext-cioos_theme \
 COPY ./contrib/docker/src/ckanext-hakai $SRC_DIR/ckanext-hakai
 RUN pip3 install -e $SRC_DIR/ckanext-hakai
 
+# ckanext-mapp is the MaPP site's equivalent: everything that used to live on
+# the mapp_master branches. It is installed in every image but only does
+# anything when CKAN__PLUGINS names it, which only the MaPP deployment does.
+COPY ./contrib/docker/src/ckanext-mapp $SRC_DIR/ckanext-mapp
+RUN pip3 install -e $SRC_DIR/ckanext-mapp \
+    && cd $SRC_DIR/ckanext-mapp \
+    && pybabel compile -d ckanext/mapp/i18n -D ckanext-mapp -l fr
+
 # The CIOOS schemas are maintained in the cioos-siooc-schema submodule and
 # copied into ckanext-hakai's package directory, where scheming reads them as
 # `ckanext.hakai:schemas/<file>`. They used to be copied into ckanext-scheming's

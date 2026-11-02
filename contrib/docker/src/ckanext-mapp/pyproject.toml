@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ckanext-mapp"
+version = "0.1.0"
+description = "MaPP site customisations that used to live on the mapp_master branches of the vendored ckanext-* forks"
+license = "AGPL-3.0-or-later"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.entry-points."ckan.plugins"]
+mapp = "ckanext.mapp.plugin:MappPlugin"
+mapp_harvest = "ckanext.mapp.harvest:MappHarvestPlugin"
+
+[tool.setuptools.packages.find]
+include = ["ckanext*"]
+
+[tool.setuptools.package-data]
+"ckanext.mapp" = [
+    "schemas/*.json",
+    "templates/**/*.html",
+    "public/*.css",
+    "public/layers/*.json",
+    "i18n/*.pot",
+    "i18n/**/*.po",
+    "i18n/**/*.mo",
+]

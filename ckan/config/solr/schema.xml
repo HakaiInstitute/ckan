@@ -190,6 +190,13 @@
     <field name="keywords" type="string" indexed="true" stored="true" />
     <field name="eov" type="string" indexed="true" stored="true" multiValued="true" />
     <field name="ecv" type="string" indexed="true" stored="true" multiValued="true" />
+    <!-- MaPP controlled vocabularies (ckanext-mapp). Inert on the other sites,
+         but they cannot be left to the catch-all `*` dynamicField: that is
+         single-valued, so a dataset in two sub-regions would fail to index. -->
+    <field name="mapp-theme" type="string" indexed="true" stored="true" multiValued="false" />
+    <field name="mapp-sub-theme" type="string" indexed="true" stored="true" multiValued="false" />
+    <field name="mapp-sub-region" type="string" indexed="true" stored="true" multiValued="true" />
+    <field name="mapp-project" type="string" indexed="true" stored="true" multiValued="true" />
     <field name="resorg_groups" type="string" indexed="true" stored="true" multiValued="true" />
     <field name="resorg_groups_en" type="string" indexed="true" stored="true" multiValued="true" />
     <field name="resorg_groups_fr" type="string" indexed="true" stored="true" multiValued="true" />
@@ -233,6 +240,10 @@
   <copyField source="projects" dest="text" />
   <copyField source="eov" dest="text" />
   <copyField source="ecv" dest="text" />
+  <copyField source="mapp-theme" dest="text" />
+  <copyField source="mapp-sub-theme" dest="text" />
+  <copyField source="mapp-sub-region" dest="text" />
+  <copyField source="mapp-project" dest="text" />
   <copyField source="urls" dest="text_en" />
   <copyField source="license_id" dest="text_en" />
   <copyField source="license_url" dest="text_en" />
@@ -242,6 +253,10 @@
   <copyField source="projects" dest="text_en" />
   <copyField source="eov" dest="text_en" />
   <copyField source="ecv" dest="text_en" />
+  <copyField source="mapp-theme" dest="text_en" />
+  <copyField source="mapp-sub-theme" dest="text_en" />
+  <copyField source="mapp-sub-region" dest="text_en" />
+  <copyField source="mapp-project" dest="text_en" />
   <copyField source="*_en" dest="text_en" />
   <copyField source="metadata-point-of-contact" dest="text_en" />
   <copyField source="cited-responsible-party" dest="text_en" />
@@ -254,6 +269,10 @@
   <copyField source="projects" dest="text_fr" />
   <copyField source="eov" dest="text_fr" />
   <copyField source="ecv" dest="text_fr" />
+  <copyField source="mapp-theme" dest="text_fr" />
+  <copyField source="mapp-sub-theme" dest="text_fr" />
+  <copyField source="mapp-sub-region" dest="text_fr" />
+  <copyField source="mapp-project" dest="text_fr" />
   <copyField source="*_fr" dest="text_fr" />
   <copyField source="metadata-point-of-contact" dest="text_fr" />
   <copyField source="cited-responsible-party" dest="text_fr" />
