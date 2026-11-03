@@ -1,0 +1,195 @@
+# Environment for the MaPP site.
+#
+# Copy this to `./.mappenv` and fill in every CHANGE_ME, then:
+#
+#     docker compose --env-file ./.mappenv up -d
+#
+# `docker compose --env-file` supplies the values interpolated into
+# docker-compose.yml; CKAN_ENV_FILE below is what injects them into the
+# containers. If you rename this file, change CKAN_ENV_FILE to match.
+#
+# There used to be one .env.template plus a per-site docker-compose file. One
+# image now carries every site's extensions and CKAN__PLUGINS picks the site,
+# so the compose file is shared and the difference lives here.
+
+CKAN_ENV_FILE=./.mappenv
+COMPOSE_FILE=docker-compose.yml
+
+#############################
+# Site
+#############################
+PROXY_NETWORK_EXTERNAL = false
+
+# CKAN__CIOOS__TURNSTILE_SITE_KEY =
+
+# The MaPP study area / sub-region outlines drawn on every map. Served by
+# ckanext-mapp from /layers/; on mapp_master they lived in cioos_theme's
+# public/base/layers/, so older configs point at /base/layers/.
+CKANEXT__SPATIAL__COMMON_MAP__GEOJSONLAYERURLS = ["https://CHANGE_ME/layers/MaPP_Sub_Region_fill_Simplify_WGS84.json"]
+
+CKAN__SITE_TITLE = '{"en": "MaPP Metadata Catalogue", "fr": "MaPP Metadata Catalogue"}'
+CKAN__SITE_HOME_URL = https://CHANGE_ME/
+# ckanext-mapp ships the MaPP homepage as layout5
+CKAN__HOMEPAGE_STYLE = 5
+CKAN__SHOW_LANGUAGE_PICKER_IN_MENU = False
+CKAN__show_language_picker_in_top_bar = False
+
+#############################
+# Extensions
+#
+# Ordering matters: `hakai` after `fluent`, and each site plugin after the
+# extension it customises - `mapp`/`iys` after `cioos_theme`, `mapp_harvest`
+# after `cioos_harvest`.
+#############################
+CKAN__PLUGINS = "envvars stats text_view image_view datatables_view datastore datapusher scheming_datasets scheming_organizations scheming_groups scheming_nerf_index fluent harvest ckan_harvester csw_harvester waf_harvester doc_harvester ckan_schema_harvester spatial_metadata spatial_query spatial_harvest_metadata_api cioos_harvest cioos_theme hakai mapp mapp_harvest ckan_cioos_harvester dcat structured_data resource_proxy geo_view geojson_view wmts_view ckan_spatial_harvester datastream_harvester"
+#	      polar_harvester
+#	      glos_harvester
+#	      cioos_rdf_harvester
+#       dcat_rdf_harvester
+#       geonetwork_harvester
+
+#
+# Scheming
+CKAN___SCHEMING__DATASET_SCHEMAS = ckanext.mapp:schemas/mapp_schema.json
+CKAN___SCHEMING__PRESETS = ckanext.hakai:presets/hakai_presets.json ckanext.scheming:presets.json ckanext.fluent:presets.json
+CKAN___SCHEMING__DATASET_FALLBACK = true
+CKAN___SCHEMING__ORGANIZATION_SCHEMAS = ckanext.hakai:schemas/organization.json
+CKAN___SCHEMING__GROUP_SCHEMAS = ckanext.hakai:schemas/group.json
+CKAN___LICENSES_GROUP_URL = file:///srv/app/src/ckanext-mapp/ckanext/mapp/schemas/ckan_license.json
+
+#
+# CIOOS theme
+CKAN__CIOOS__RA_CSS_PATH = /mapp.css
+CKAN__HARVEST_RESPONSIBLE_ORGANIZATIONS = True
+# CKAN__RESPONSIBLE_ORGANIZATION_ROLES = ["owner", "originator", "author", "principalInvestigator"]
+CKAN__EOV_ICON_BASE_PATH = /base/images/eov-icons-svg/pacific/pac_
+#CKAN__EXCLUDE_EOV = ['other']
+#CKAN__EXCLUDE_EOV_CATEGORY = ['Other']
+CKAN__SHOW_SOCIAL_IN_DATASET_SIDEBAR = False
+CKAN__HIDE_ORGANIZATION_IN_BREADCRUMB = True
+CKAN__HIDE_ORGANIZATION_IN_DATASET_SIDEBAR = True
+CKAN__SHOW_RESPONSIBLE_ORGANIZATION_IN_DATASET_SIDEBAR = True
+CKAN__SITE_ABOUT = '{"en": "", "fr": ""}'
+CKAN__SITE_DESCRIPTION = '{"en": "", "fr": ""}'
+CKAN__SITE_HEADING = '{"en": "", "fr": ""}'
+CKAN__SITE_INTRO_TEXT = '{"en": "", "fr": ""}'
+CKAN__SITE_LOGO_TRANSLATED = '{"en": "", "fr": ""}'
+CKAN__THEME = css/main
+
+#
+# Spatial
+CKAN__SPATIAL__SPATIAL_WIDGET_EXPANDS = false
+CKANEXT__SPATIAL__SEARCH_BACKEND = solr
+CKANEXT__SPATIAL__DEFAULT_EXTENT = [[49.0, -134.0], [56.0, -126.0]]
+CKANEXT__SPATIAL__COMMON_MAP__STADIA__API_KEY = CHANGE_ME
+CKAN__CIOOS__RA_JSON_FILE = /base/layers/CHANGE_ME_RA.json
+CKAN__SEARCH__SOLR_ALLOWED_QUERY_PARSERS = frange
+
+#
+# Harvest
+CKAN__HARVEST__MQ__TYPE=redis
+CKAN__HARVEST__MQ__HOSTNAME=redis
+CKAN__HARVEST__MQ__PORT=6379
+CKAN__HARVEST__MQ__REDIS_DB=1
+
+#
+# DCat
+CKANEXT__DCAT__RDF__PROFILES = schemaorg cioos_dcat
+CKANEXT__DCAT__TRANSLATE_KEYS = False
+
+#
+# GeoView
+CKANEXT__GEOVIEW__OL_VIEWER__FORMATS = wms kml wfs geojson gml kml arcgis_rest
+CKANEXT__GEOVIEW__OL_VIEWER__HIDE_OVERLAYS =  false
+CKANEXT__GEOVIEW__OL_VIEWER__DEFAULT_FEATURE_HOVERON =  true
+CKANEXT__GEOVIEW__OL_VIEWER__FORWARD_OGC_REQUEST_PARAMS =  true
+
+#############################
+# Images
+#############################
+CKAN_IMAGE=hakaiinstitute/ckan
+CKAN_TAG=latest
+DB_IMAGE=hakaiinstitute/postgresql:latest
+SOLR_IMAGE=hakaiinstitute/solr:latest
+
+COMPOSE_DOCKER_CLI_BUILD=1
+DOCKER_BUILDKIT=1
+# DOCKER_DEFAULT_PLATFORM=linux/amd64
+
+#############################
+# CKAN
+#############################
+CKAN_SITE_ID=default
+CKAN_SITE_URL=https://CHANGE_ME
+CKAN_PORT=5000
+
+# Folder on the host for the CKAN access log that Fail2ban reads.
+CKAN_LOG_PATH=/var/log/ckan
+
+# CKAN 2.10+ requires SECRET_KEY. The base image's start_ckan.sh generates it,
+# WTF_CSRF_SECRET_KEY and the api_token.jwt secrets on first boot when ckan.ini
+# leaves them blank, so leave these unset unless you are restoring a database
+# and need the old session cookies to stay valid.
+# CKAN___SECRET_KEY=CHANGE_ME
+# CKAN___APP_INSTANCE_UUID=CHANGE_ME
+# CKAN___API_TOKEN__JWT__ENCODE__SECRET=string:CHANGE_ME
+# CKAN___API_TOKEN__JWT__DECODE__SECRET=string:CHANGE_ME
+
+CKAN_SYSADMIN_NAME=admin
+CKAN_SYSADMIN_PASSWORD=CHANGE_ME
+CKAN_SYSADMIN_EMAIL=CHANGE_ME@example.com
+TZ=UTC
+
+CKAN_VERSION=2.12.1
+CKAN_CORE_NAME=ckan
+CKAN_SOLR_URL=http://solr:8983/solr/ckan
+CKAN_REDIS_URL = redis://redis:6379/1
+CKAN_DATAPUSHER_URL = http://datapusher:8800
+
+CKAN__CACHE_EXPIRES = 604800
+CKAN__CACHE_ENABLED = True
+CKAN__TRACKING_ENABLED = false
+CKAN_MAX_UPLOAD_SIZE_MB=100
+
+CKAN__LOCALE_DEFAULT = en
+CKAN__LOCALE_ORDER = en
+CKAN__LOCALES_OFFERED = en
+
+#CKAN__TEMPLATE_HEAD_END = <!-- Global site tag (gtag__js) - Google Analytics --><script async src="https://www__googletagmanager__com/gtag/js?id=CHANGE_ME"></script>
+
+# Email
+#CKAN___EMAIL_TO=
+#CKAN___ERROR_EMAIL_FROM=
+CKAN___SMTP_SERVER=smtp.corporateict.domain:25
+CKAN___SMTP_STARTTLS=True
+CKAN___SMTP_USER=user
+CKAN___SMTP_PASSWORD=CHANGE_ME
+CKAN___SMTP_MAIL_FROM=ckan@localhost
+
+# Amazon Translate, used by the metadata form
+AWS_DEFAULT_REGION=us-east-1
+AWS_ACCESS_KEY_ID=CHANGE_ME
+AWS_SECRET_ACCESS_KEY=CHANGE_ME
+
+#############################
+# Database
+#############################
+POSTGRES_PASSWORD=CHANGE_ME
+POSTGRES_PORT=5432
+# The datastore database is created in the db container.
+# Readwrite user/pass is ckan:POSTGRES_PASSWORD, readonly is
+# datastore_ro:DATASTORE_READONLY_PASSWORD.
+DATASTORE_READONLY_PASSWORD=CHANGE_ME
+
+#############################
+# Container CPU limits
+#
+# 0 means unlimited, which is what docker-compose.yml falls back to.
+#############################
+LIMIT_CPU_CKAN = 0.5
+LIMIT_CPU_CKAN_GATHER_HARVESTER = 0.25
+LIMIT_CPU_CKAN_FETCH_HARVESTER = 0.5
+LIMIT_CPU_CKAN_RUN_HARVESTER = 0.25
+LIMIT_CPU_DB = 0.5
+LIMIT_CPU_SOLR = 1.0
+LIMIT_CPU_REDIS = 0.25

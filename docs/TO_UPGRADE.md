@@ -80,7 +80,7 @@ will not index properly.
 cd ~/ckan/contrib/docker
 sudo docker-compose pull ckan
 ./clean_reload_ckan.sh
-sudo docker-compose -f docker-compose.cpu_limited.yml --compatibility up -d
+sudo docker compose --env-file ./.hakaienv --compatibility up -d
 ```
 
 # Upgrade the database and build web assets?

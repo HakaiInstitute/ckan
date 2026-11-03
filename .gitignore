@@ -48,7 +48,12 @@ ckan_deb/DEBIAN/prerm
 node_modules/
 
 # docker
+# The per-site environment files, copied from the tracked .*env.template files
+# and filled in. They hold passwords and API keys, so they stay out of git.
 contrib/docker/.env
+contrib/docker/.hakaienv
+contrib/docker/.mappenv
+contrib/docker/.iysenv
 cypress.env.json
 
 

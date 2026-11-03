@@ -123,7 +123,7 @@ a new image without clearing that volume silently keeps running 2.9 code.
 cd ~/ckan/contrib/docker
 sudo docker compose pull ckan
 ./clean_reload_ckan.sh          # stops ckan + harvesters, removes docker_ckan_home
-sudo docker compose -f docker-compose.cpu_limited.yml --compatibility up -d
+sudo docker compose --env-file ./.hakaienv --compatibility up -d
 ```
 
 ## 4. Database migration

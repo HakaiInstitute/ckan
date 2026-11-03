@@ -12,17 +12,21 @@ clone this repo
 git clone https://github.com/HakaiInstitute/ckan.git
 ```
 
-populate the env file
+populate the env file for the site you are running — one of `hakai`, `mapp`
+or `iys`
 ```
 cd ckan/contrib/docker
-cp .env.template .env
-nano .env
+cp .hakaienv.template .hakaienv
+nano .hakaienv
 ```
 
 pull images from docker hub and start the containers
 ```
-sudo docker-compose up -d
+sudo docker compose --env-file ./.hakaienv up -d
 ```
+
+All three sites run the same image and the same `docker-compose.yml`; the env
+file picks the site, mainly through `CKAN__PLUGINS`.
 
 assuming you used the default settings you can now visit the site at `http://localhost:5000`
 

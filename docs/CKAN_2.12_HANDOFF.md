@@ -27,6 +27,7 @@ adcd02f13  Phase 2: add ckanext-hakai and move the scheming/fluent patches into 
 | ckanext-mapp | new — the three `mapp_master` branches folded into one extension |
 | ckanext-iys | new — the `iys_master` branch of cioos_theme folded in; the schema branch held nothing |
 | **ckanext-spatial** | **not started** — blocks the full build |
+| Deployment | one `docker-compose.yml` + one env file per site |
 | Phase 2 (de-forking) | four slices done, more possible |
 
 The image builds and **all plugins load on Python 3.14** when ckanext-spatial's
@@ -112,6 +113,10 @@ image or source, not from memory.
   `production_root_url.ini` is tracked. Config changes do not travel via
   `git pull`; they must be applied by hand wherever the image is built.
   The Dockerfile copies the gitignored `production.ini` at build time.
+- **The site env files are gitignored too.** `.hakaienv`, `.mappenv` and
+  `.iysenv` hold passwords and API keys; only the `.*env.template` files are
+  tracked. Every compose command needs `--env-file`, or it silently falls back
+  to `./.env` and interpolates the wrong site.
 - `contrib/docker/who.ini` is gitignored and now unused.
 - `ECV.json` in cioos-siooc-schema has a trailing comma and is invalid JSON.
   Pre-existing, not copied into the image, so inert.
@@ -212,30 +217,58 @@ is identical to its merge-base with `hakai_master` — every IYS schema change
 was merged into the shared line long ago and the branch has only fallen behind
 since. It can be deleted without extracting anything.
 
-### Site branches in the parent repository
+### One compose file, one env file per site
 
-Both site branches exist here too, and neither was touched:
+There were five near-identical compose files: `docker-compose.yml`,
+`docker-compose.hakai.yml`, `docker-compose.cpu_limited.yml`, and a
+`docker-compose.iys.yml` / `docker-compose.mapp.yml` on the parent repo's
+`iys_master` and `MaPP_master` branches. They differed in the image tag,
+whether CPU limits were declared, and whether the services joined Hakai's
+external proxy network. One image now carries every site's extensions and
+`CKAN__PLUGINS` picks the site, so all of that is environment:
 
-- **`iys_master`** — `contrib/docker/docker-compose.iys.yml`, plus a `push:`
-  trigger on `.github/workflows/iys-ckan-docker-image.yml` (which is already
-  on `hakai_master`, and still copies the removed `who_root_url.ini`).
-- **`MaPP_master`** — `contrib/docker/docker-compose.mapp.yml`,
-  `contrib/docker/migrations/mapp_ckan_1.5.0.sql`, and the MaPP Solr fields.
-  Its merge-base with `hakai_master` is ancient (695 commits, and it still
+```bash
+docker compose --env-file ./.hakaienv up -d
+docker compose --env-file ./.mappenv  up -d
+docker compose --env-file ./.iysenv   up -d
+```
+
+`.env.template` and the hakai/cpu_limited compose files are gone, replaced by
+`contrib/docker/.{hakai,mapp,iys}env.template`. `--env-file` supplies the
+values interpolated into the compose file; `CKAN_ENV_FILE`, set inside each
+template to its own path, is what injects them into the containers — keep the
+two in step. The helper scripts (`clean_reload_ckan.sh`, `update_solr.sh`,
+`ckan_utils.sh`) read `CKAN_ENV_FILE` and default to `./.env`.
+
+Three things parameterise what used to be separate files:
+`LIMIT_CPU_*` (0 = unlimited, the old `docker-compose.yml` behaviour),
+`PROXY_NETWORK_EXTERNAL`/`PROXY_NETWORK_NAME` (Hakai's Turnstile proxy network
+is external; elsewhere Compose creates `ckan_proxynet`), and
+`CKAN_IMAGE`/`DB_IMAGE`/`SOLR_IMAGE`.
+
+`docker-compose.local.yml` was **left alone**. It is the build-from-source
+variant and is separately 2.9-era (`/usr/lib/ckan` paths, `cioos/ckan` image);
+it needs its own pass.
+
+### Still on the parent repo's site branches
+
+- **`MaPP_master`** — `contrib/docker/migrations/mapp_ckan_1.5.0.sql`, a
+  one-off 2.9-era data migration. It rewrites `contact-info_online-resource`
+  from a bare URL into the JSON blob form and strips `position-name`, and is
+  what the contact normalisation in `ckanext-mapp` exists to paper over for
+  records that predate it. It operates on `package_extra`, **which CKAN 2.12
+  dropped**, so it cannot be run as-is against a 2.12 database.
+  Note its merge-base with `hakai_master` is ancient (695 commits, and it still
   carries an `old/` copy of CKAN), so diff it file by file, not wholesale.
+- **`iys_master`** — nothing but a `push:` trigger on
+  `.github/workflows/iys-ckan-docker-image.yml`.
 
-Both compose files differ from the shared `docker-compose.yml` only in the
-image tag (`hakaiinstitute/ckan:iys_${CKAN_TAG}` / `mapp_${CKAN_TAG}`), a few
-CPU limits and whitespace. Under one-image-many-plugins there is no per-site
-image to tag, so they should collapse into the shared compose file plus a
-per-site `.env`.
-
-`mapp_ckan_1.5.0.sql` is a one-off 2.9-era data migration: it rewrites
-`contact-info_online-resource` from a bare URL into the JSON blob form and
-strips `position-name`. It is also what the contact normalisation in
-`ckanext-mapp` exists to paper over for records that predate it. It operates
-on `package_extra`, **which CKAN 2.12 dropped**, so it cannot be run as-is
-against a 2.12 database.
+That workflow is still here and still builds a separate
+`hakaiinstitute/ckan:iys_*` image, which one-image-many-plugins makes
+redundant. It was left in place rather than deleted in case a deployment still
+pulls that tag. Its `.env.template` and `who_root_url.ini` copy steps were
+removed from all three image workflows — nothing in the build read them, and
+`who_root_url.ini` has not existed for some time, so those steps were failing.
 
 Remaining:
 - **ckanext-harvest, 296 lines left.** `ckanharvester.py` (120) — the

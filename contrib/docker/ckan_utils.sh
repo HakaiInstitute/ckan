@@ -5,7 +5,10 @@
 
 CKAN_IMAGE_NAME="ckan"
 DOCKER_CMD="docker" # or "sudo docker"
-DOCKER_COMPOSE_CMD="docker compose" # or "sudo docker-compose"
+# Every site shares one docker-compose.yml and is selected by its env file, so
+# every compose call needs --env-file. Set CKAN_ENV_FILE before sourcing this
+# (e.g. CKAN_ENV_FILE=./.mappenv); it defaults to ./.env.
+DOCKER_COMPOSE_CMD="docker compose --env-file ${CKAN_ENV_FILE:-./.env}" # prefix with sudo if needed
 EDIT_CMD="vim" # or nano
 CKAN_PRODUCTION_INI="$CKAN_PRODUCTION_INI"
 #CIOOS_NATIONAL_CATALOGUE="https://catalogue.cioos.ca"

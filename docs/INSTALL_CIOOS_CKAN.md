@@ -191,13 +191,18 @@ git submodule update
 
 ## Create config files
 
-Create environment file and populate with appropriate values
+Create the environment file for the site you are installing and populate it
+with appropriate values. There is one template per site — `.hakaienv.template`,
+`.mappenv.template`, `.iysenv.template` — and they all drive the same
+`docker-compose.yml`.
 
 ```bash
 cd ~/ckan/contrib/docker/
-cp .env.template .env
-nano .env
+cp .hakaienv.template .hakaienv
+nano .hakaienv
 ```
+
+Pass it to every compose command with `--env-file ./.hakaienv`.
 
 ### Installing CKAN as the root website
 
@@ -206,7 +211,6 @@ If your CKAN installation will run at the root of your domain, for example <http
 ```bash
 cd ~/ckan/contrib/docker/
 cp production_root_url.ini production.ini
-cp who_root_url.ini who.ini
 ```
 
 ### Installing CKAN off the root of a website
@@ -216,14 +220,16 @@ Use this setup if your site will run at <http://yourdomain.com/ckan>
 ```bash
 cd ~/ckan/contrib/docker/
 cp production_non_root_url.ini production.ini
-cp who_non_root_url.ini who.ini
 ```
+
+> `who.ini` is gone. repoze.who was replaced by flask-login in CKAN 2.10, and
+> `who_root_url.ini` / `who_non_root_url.ini` no longer exist in the tree.
 
 ### Configuring pyCSW
 
 Copy [pyCSW](https://pycsw.org/) config template file and update the database password.
 
-The database password is the same password entered in your **.env** file
+The database password is the same password entered in your site env file
 
 ```bash
 cd ~/ckan/contrib/docker/pycsw

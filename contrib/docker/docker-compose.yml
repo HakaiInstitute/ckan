@@ -1,8 +1,28 @@
-version: "3.4"
+# One compose file for every site.
+#
+# There used to be five near-identical copies of this: docker-compose.yml,
+# docker-compose.hakai.yml, docker-compose.cpu_limited.yml, and a
+# docker-compose.iys.yml / docker-compose.mapp.yml on the iys_master and
+# MaPP_master branches. They differed in the image tag, whether CPU limits were
+# declared, and whether the services joined Hakai's external proxy network.
+# Now that one image carries every site's extensions and the site is chosen by
+# CKAN__PLUGINS, all of that is environment.
+#
+# Pick a site with --env-file:
+#
+#   docker compose --env-file ./.hakaienv up -d
+#   docker compose --env-file ./.mappenv  up -d
+#   docker compose --env-file ./.iysenv   up -d
+#
+# --env-file supplies the values interpolated below; CKAN_ENV_FILE, set inside
+# each of those files to its own path, is what injects them into the
+# containers. Keep the two in step. With neither, this falls back to ./.env.
+#
+# `version:` is deliberately absent - Compose V2 ignores it and warns.
 
 x-ckan: &ckan_app
   container_name: ckan
-  image: hakaiinstitute/ckan:${CKAN_TAG}
+  image: ${CKAN_IMAGE:-hakaiinstitute/ckan}:${CKAN_TAG:-latest}
   links:
     - db
     - solr
@@ -10,7 +30,7 @@ x-ckan: &ckan_app
   ports:
     - "0.0.0.0:${CKAN_PORT}:5000"
   env_file:
-    - ./.env
+    - ${CKAN_ENV_FILE:-./.env}
   environment:
     # Defaults work with linked containers, change to use own Postgres, SolR, Redis or Datapusher
     CKAN_SQLALCHEMY_URL: postgresql://ckan:${POSTGRES_PASSWORD}@db/ckan
@@ -18,10 +38,12 @@ x-ckan: &ckan_app
     CKAN_DATASTORE_READ_URL: postgresql://datastore_ro:${DATASTORE_READONLY_PASSWORD}@db/datastore
     DS_RO_PASS: ${DATASTORE_READONLY_PASSWORD}
     # Debug with pdb (example) - Interact with `docker attach $(docker container ls -qf name=ckan)`
-    #command: 'python -m pdb /usr/lib/ckan/venv/bin/ckan --config /srv/app/ckan.ini run --host 0.0.0.0 --passthrough-errors'
+    #command: 'python -m pdb /usr/local/bin/ckan --config /srv/app/ckan.ini run --host 0.0.0.0 --passthrough-errors'
     #tty: true
     #stdin_open: true
   restart: unless-stopped
+  networks:
+    - proxynet
   volumes:
     - "/etc/localtime:/etc/localtime:ro" # remove and use TZ setting if running on windows
     - ckan_home:/srv/app
@@ -35,6 +57,14 @@ volumes:
   solr_data:
   redis_data:
 
+networks:
+  # Hakai fronts CKAN with a Cloudflare Turnstile proxy that lives outside this
+  # file, so there PROXY_NETWORK_EXTERNAL=true and the name is the proxy's own
+  # network. Everywhere else Compose just creates ckan_proxynet.
+  proxynet:
+    name: ${PROXY_NETWORK_NAME:-ckan_proxynet}
+    external: ${PROXY_NETWORK_EXTERNAL:-false}
+
 services:
   ckan:
     <<: *ckan_app
@@ -44,8 +74,14 @@ services:
       - "/etc/localtime:/etc/localtime:ro" # remove and use TZ setting if running on windows
       - ckan_home:/srv/app
       - ckan_storage:/var/lib/ckan
-      # - ${CKAN_LOG_PATH}:/srv/app/logs
+      - ${CKAN_LOG_PATH}:/srv/app/logs
       - ./ckan-entrypoint.sh:/docker-entrypoint.d/ckan-entrypoint.sh
+    # A limit of 0 means unlimited, which is what the unparameterised
+    # docker-compose.yml used to do. The per-site env files set real values.
+    deploy:
+      resources:
+        limits:
+          cpus: '${LIMIT_CPU_CKAN:-0}'
     depends_on:
       db:
         condition: service_healthy
@@ -58,77 +94,89 @@ services:
       start_period: 60s
       interval: 60s
       timeout: 5s
-      retries: 5  
+      retries: 5
 
   ckan_gather_harvester:
-     <<: *ckan_app
-     container_name: ckan_gather_harvester
-     user: ckan
-     command: ckan --config=/srv/app/ckan.ini harvester gather-consumer
-     ports: []
-     volumes:
+    <<: *ckan_app
+    container_name: ckan_gather_harvester
+    user: ckan
+    command: ckan --config=/srv/app/ckan.ini harvester gather-consumer
+    ports: []
+    volumes:
       - "/etc/localtime:/etc/localtime:ro" # remove and use TZ setting if running on windows
       - ckan_home:/srv/app
       - ckan_storage:/var/lib/ckan
       - ${CKAN_LOG_PATH}:/srv/app/logs
       - ./ckan-harvester-entrypoint.sh:/docker-entrypoint.d/ckan-harvester-entrypoint.sh
-     healthcheck:
+    deploy:
+      resources:
+        limits:
+          cpus: '${LIMIT_CPU_CKAN_GATHER_HARVESTER:-0}'
+    healthcheck:
       test: ["CMD-SHELL", "ps -o args | grep -q 'harvester gather-consumer'"]
       start_period: 5s
       interval: 60s
       timeout: 5s
-      retries: 1        
-     depends_on:
-       ckan:
-         condition: service_healthy
+      retries: 1
+    depends_on:
+      ckan:
+        condition: service_healthy
 
   ckan_fetch_harvester:
-     <<: *ckan_app
-     container_name: ckan_fetch_harvester
-     user: ckan
-     command: ckan --config=/srv/app/ckan.ini harvester fetch-consumer
-     ports: []
-     volumes:
+    <<: *ckan_app
+    container_name: ckan_fetch_harvester
+    user: ckan
+    command: ckan --config=/srv/app/ckan.ini harvester fetch-consumer
+    ports: []
+    volumes:
       - "/etc/localtime:/etc/localtime:ro" # remove and use TZ setting if running on windows
       - ckan_home:/srv/app
       - ckan_storage:/var/lib/ckan
       - ${CKAN_LOG_PATH}:/srv/app/logs
       - ./ckan-harvester-entrypoint.sh:/docker-entrypoint.d/ckan-harvester-entrypoint.sh
-     healthcheck:
+    deploy:
+      resources:
+        limits:
+          cpus: '${LIMIT_CPU_CKAN_FETCH_HARVESTER:-0}'
+    healthcheck:
       test: ["CMD-SHELL", "ps -o args | grep -q 'harvester fetch-consumer'"]
       start_period: 5s
       interval: 60s
       timeout: 5s
-      retries: 1        
-     depends_on:
-       ckan:
-         condition: service_healthy
-       ckan_gather_harvester:
-         condition: service_started
+      retries: 1
+    depends_on:
+      ckan:
+        condition: service_healthy
+      ckan_gather_harvester:
+        condition: service_started
 
   ckan_run_harvester:
-     <<: *ckan_app
-     container_name: ckan_run_harvester
-     user: root
-     command: /bin/bash -c "echo 'ckan_run_harvester started' && cron -f 2>&1 "
-     ports: []
-     entrypoint: /docker-entrypoint.d/ckan-run-harvester-entrypoint.sh
-     volumes:
+    <<: *ckan_app
+    container_name: ckan_run_harvester
+    user: root
+    command: /bin/bash -c "echo 'ckan_run_harvester started' && cron -f 2>&1 "
+    ports: []
+    entrypoint: /docker-entrypoint.d/ckan-run-harvester-entrypoint.sh
+    volumes:
       - ckan_home:/srv/app
       - ./ckan-run-harvester-entrypoint.sh:/docker-entrypoint.d/ckan-run-harvester-entrypoint.sh
-     healthcheck:
+    deploy:
+      resources:
+        limits:
+          cpus: '${LIMIT_CPU_CKAN_RUN_HARVESTER:-0}'
+    healthcheck:
       test: ["CMD-SHELL", "ps -o args | grep -q '^cron -f'"]
       start_period: 5s
       interval: 60s
       timeout: 5s
-      retries: 1  
-     depends_on:
-       ckan:
-          condition: service_healthy
-       ckan_gather_harvester:
-          condition: service_started
-       ckan_fetch_harvester:
-          condition: service_started
+      retries: 1
+    depends_on:
+      ckan:
+        condition: service_healthy
+      ckan_gather_harvester:
+        condition: service_started
+      ckan_fetch_harvester:
+        condition: service_started
 
   # datapusher:
   #   container_name: datapusher
@@ -136,19 +184,27 @@ services:
   #   restart: unless-stopped
   #   ports:
   #     - "8800:8800"
+  #   networks:
+  #     - proxynet
 
   db:
     container_name: db
-    image: hakaiinstitute/postgresql:latest
+    image: ${DB_IMAGE:-hakaiinstitute/postgresql:latest}
     ports:
        - "5432:5432"
     environment:
       - DS_RO_PASS=${DATASTORE_READONLY_PASSWORD}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - PGDATA=/var/lib/postgresql/data
+    networks:
+      - proxynet
     volumes:
       - "/etc/localtime:/etc/localtime:ro" # remove and use TZ setting if running on windows
       - pg_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '${LIMIT_CPU_DB:-0}'
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "ckan"]
       interval: 10s
@@ -157,14 +213,20 @@ services:
 
   solr:
     container_name: solr
-    image: hakaiinstitute/solr:latest
+    image: ${SOLR_IMAGE:-hakaiinstitute/solr:latest}
     restart: unless-stopped
     ports:
       - "8983:8983"
     environment:
       - SOLR_LOG_LEVEL=WARN
+    networks:
+      - proxynet
     volumes:
       - solr_data:/var/solr
+    deploy:
+      resources:
+        limits:
+          cpus: '${LIMIT_CPU_SOLR:-0}'
     logging:
       options:
         max-size: "100m"
@@ -181,8 +243,14 @@ services:
     container_name: redis
     image: redis:latest
     restart: unless-stopped
+    networks:
+      - proxynet
     volumes:
       - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '${LIMIT_CPU_REDIS:-0}'
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       interval: 60s

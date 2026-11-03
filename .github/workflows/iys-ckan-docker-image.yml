@@ -17,9 +17,11 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: '0'
-    - run: cp ./contrib/docker/.env.template ./contrib/docker/.env
+    # production.ini is the only prep the Dockerfile needs: it COPYs that file.
+    # The .env and who.ini copies that used to sit here were vestigial - nothing
+    # in the build read them, who_root_url.ini has not existed for some time, and
+    # .env.template is gone in favour of the per-site .*env.template files.
     - run: cp ./contrib/docker/production_root_url.ini ./contrib/docker/production.ini
-    - run: cp ./contrib/docker/who_root_url.ini ./contrib/docker/who.ini
     - run: cp ./contrib/docker/pycsw/pycsw.cfg.template ./contrib/docker/pycsw/pycsw.cfg
     - name: Set current date as TAG env variable for push requests
       run: echo "TAG=$(date +'%Y-%m-%d')" >> $GITHUB_ENV

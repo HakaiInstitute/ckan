@@ -132,10 +132,23 @@ existing deployment behaves exactly as before.
 
 Nothing in `ckanext-cioos_theme`, and nothing at all in `cioos-siooc-schema`.
 
-The **parent repository** also has an `iys_master` branch. It holds
-`contrib/docker/docker-compose.iys.yml` and a `push:` trigger on
-`.github/workflows/iys-ckan-docker-image.yml`. That compose file differs from
-the shared `docker-compose.yml` only in the image tag
-(`hakaiinstitute/ckan:iys_${CKAN_TAG}`), some CPU limits and whitespace. Under
-one-image-many-plugins there is no IYS image to tag, so it should collapse into
-the shared compose file plus an IYS `.env`. That has **not** been done here.
+The **parent repository** also has an `iys_master` branch.
+
+Its `contrib/docker/docker-compose.iys.yml` is gone: it differed from the
+shared `docker-compose.yml` only in the image tag
+(`hakaiinstitute/ckan:iys_${CKAN_TAG}`), some CPU limits and whitespace, and
+under one-image-many-plugins there is no IYS image to tag. IYS now runs the
+shared compose file:
+
+```bash
+docker compose --env-file ./.iysenv up -d
+```
+
+with `.iysenv` copied from the tracked `contrib/docker/.iysenv.template`, which
+carries the settings listed above.
+
+What is left on that branch is a `push:` trigger on
+`.github/workflows/iys-ckan-docker-image.yml`. That workflow still builds and
+pushes a separate `hakaiinstitute/ckan:iys_*` image, which one-image-many-plugins
+makes redundant. It has been left alone rather than deleted, in case a
+deployment still pulls that tag.

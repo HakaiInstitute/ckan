@@ -202,20 +202,24 @@ failure.
 The three submodule `mapp_master` branches are fully represented here. They are
 left in place for history; nothing in this repository points at them any more.
 
-The **parent repository** also has a `MaPP_master` branch, which holds two
-things this extension does not:
+The **parent repository** also has a `MaPP_master` branch.
 
-- **`contrib/docker/docker-compose.mapp.yml`.** It differs from the shared
-  `docker-compose.yml` only in the image tag
-  (`hakaiinstitute/ckan:mapp_${CKAN_TAG}`), a few CPU limits and whitespace.
-  Under one-image-many-plugins there is no MaPP image to tag, so it should
-  collapse into the shared compose file plus a MaPP `.env`.
-- **`contrib/docker/migrations/mapp_ckan_1.5.0.sql`.** A one-off 2.9-era data
-  migration that rewrites `contact-info_online-resource` from a bare URL into
-  the JSON blob form and strips `position-name` — the same shape the contact
-  normalisation above produces at read time, for records that predate it. It
-  operates on `package_extra`, **which CKAN 2.12 dropped**, so it cannot be run
-  as-is against a 2.12 database.
+Its `contrib/docker/docker-compose.mapp.yml` is gone: it differed from the
+shared `docker-compose.yml` only in the image tag
+(`hakaiinstitute/ckan:mapp_${CKAN_TAG}`), a few CPU limits and whitespace, and
+under one-image-many-plugins there is no MaPP image to tag. MaPP now runs the
+shared compose file:
 
-Neither has been moved. A shell script and a SQL file are deployment artefacts,
-not extension content.
+```bash
+docker compose --env-file ./.mappenv up -d
+```
+
+with `.mappenv` copied from the tracked `contrib/docker/.mappenv.template`.
+
+What is left on that branch is **`contrib/docker/migrations/mapp_ckan_1.5.0.sql`**,
+a one-off 2.9-era data migration that rewrites `contact-info_online-resource`
+from a bare URL into the JSON blob form and strips `position-name` — the same
+shape the contact normalisation above produces at read time, for records that
+predate it. It operates on `package_extra`, **which CKAN 2.12 dropped**, so it
+cannot be run as-is against a 2.12 database and has not been moved here. A SQL
+runbook is a deployment artefact, not extension content.
