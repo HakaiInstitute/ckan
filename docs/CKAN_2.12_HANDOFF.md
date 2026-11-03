@@ -6,6 +6,7 @@ separate document: [UPGRADE_2.9_TO_2.12.md](UPGRADE_2.9_TO_2.12.md).
 **Branch:** `ckan-2.12-upgrade` (off `hakai_master`), nothing pushed.
 
 ```
+7dde3e9e9  Phase 2: fold the iys_master branch into ckanext-iys
 f25a7d575  Phase 2: fold the three mapp_master branches into ckanext-mapp
 371ef543f  Phase 2: move the CIOOS-only harvest pieces into the cioos extensions
 adcd02f13  Phase 2: add ckanext-hakai and move the scheming/fluent patches into it
@@ -24,8 +25,9 @@ adcd02f13  Phase 2: add ckanext-hakai and move the scheming/fluent patches into 
 | fluent, scheming, harvest | merged with 2.12-tested upstreams |
 | cioos_theme, cioos_harvest, cioos-siooc-schema | ported |
 | ckanext-mapp | new — the three `mapp_master` branches folded into one extension |
+| ckanext-iys | new — the `iys_master` branch of cioos_theme folded in; the schema branch held nothing |
 | **ckanext-spatial** | **not started** — blocks the full build |
-| Phase 2 (de-forking) | three slices done, more possible |
+| Phase 2 (de-forking) | four slices done, more possible |
 
 The image builds and **all plugins load on Python 3.14** when ckanext-spatial's
 two layers are removed. With spatial unported the real build fails at
@@ -190,7 +192,8 @@ Accept upstream's deletions of `controllers/api.py`, the `plugin/` package,
 Done so far: `ckanext-hakai` created (schemas + fluent presets + fluent_text
 template); CIOOS harvester → `ckanext-cioos_harvest`; harvest templates →
 `ckanext-cioos_theme`; `ckanext-mapp` created, retiring the three `mapp_master`
-branches (cioos_theme, spatial, cioos-siooc-schema).
+branches (cioos_theme, spatial, cioos-siooc-schema); `ckanext-iys` created,
+retiring `ckanext-cioos_theme@iys_master`.
 
 Guiding rule learned: **check whether a customisation exists on
 `upstream/cioos-siooc` but not `ckan/master`.** If so it is CIOOS-level and
@@ -203,10 +206,36 @@ with the shared line, not against `hakai_master`.** Most of what
 `hakai_master` by another route; the real site-specific delta in cioos_theme was
 12 files, and in spatial 4.
 
-### Other site branches
+Third rule, from the IYS slice: **check whether a site branch still differs at
+all.** `cioos-siooc-schema@iys_master` has 19 commits on it and its tip content
+is identical to its merge-base with `hakai_master` — every IYS schema change
+was merged into the shared line long ago and the branch has only fallen behind
+since. It can be deleted without extracting anything.
 
-`ckanext-cioos_theme` also has an `iys_master`. It was not touched here, but
-the same treatment would apply.
+### Site branches in the parent repository
+
+Both site branches exist here too, and neither was touched:
+
+- **`iys_master`** — `contrib/docker/docker-compose.iys.yml`, plus a `push:`
+  trigger on `.github/workflows/iys-ckan-docker-image.yml` (which is already
+  on `hakai_master`, and still copies the removed `who_root_url.ini`).
+- **`MaPP_master`** — `contrib/docker/docker-compose.mapp.yml`,
+  `contrib/docker/migrations/mapp_ckan_1.5.0.sql`, and the MaPP Solr fields.
+  Its merge-base with `hakai_master` is ancient (695 commits, and it still
+  carries an `old/` copy of CKAN), so diff it file by file, not wholesale.
+
+Both compose files differ from the shared `docker-compose.yml` only in the
+image tag (`hakaiinstitute/ckan:iys_${CKAN_TAG}` / `mapp_${CKAN_TAG}`), a few
+CPU limits and whitespace. Under one-image-many-plugins there is no per-site
+image to tag, so they should collapse into the shared compose file plus a
+per-site `.env`.
+
+`mapp_ckan_1.5.0.sql` is a one-off 2.9-era data migration: it rewrites
+`contact-info_online-resource` from a bare URL into the JSON blob form and
+strips `position-name`. It is also what the contact normalisation in
+`ckanext-mapp` exists to paper over for records that predate it. It operates
+on `package_extra`, **which CKAN 2.12 dropped**, so it cannot be run as-is
+against a 2.12 database.
 
 Remaining:
 - **ckanext-harvest, 296 lines left.** `ckanharvester.py` (120) — the
