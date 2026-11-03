@@ -261,6 +261,82 @@ The `package_extent` table and the postgis extension can be dropped once the
 upgrade is confirmed good, but leaving them costs nothing and keeps a
 rollback possible.
 
+## 10. PostgreSQL 11 → 16
+
+The database image moves from `postgis/postgis:11-3.3` to
+`postgis/postgis:16-3.6`. This was previously blocked: the deployment was
+pinned to an old PostGIS because ckanext-spatial needed it. Nothing uses
+PostGIS now, so the pin is gone.
+
+**PostgreSQL will not start on a data directory written by an older major
+version.** Pointing the new image at the existing `pg_data` volume fails with:
+
+```
+FATAL:  database files are incompatible with server
+DETAIL: The data directory was initialized by PostgreSQL version 11,
+        which is not compatible with this version 16.15
+```
+
+So this is a dump and restore, not an image swap.
+
+> **Pin `DB_IMAGE` before this step.** CI pushes both a dated tag and
+> `latest`, and the env files use `latest`. Once a PostgreSQL 16 image is
+> published, an ordinary `docker compose pull` on an un-migrated site takes
+> the database down. Pin `DB_IMAGE` to the last PostgreSQL 11 dated tag until
+> you are ready, then move it back.
+
+```bash
+cd contrib/docker
+ENVFILE=./.hakaienv     # or .mappenv / .iysenv
+
+# 1. Stop everything that writes to the database.
+docker compose --env-file $ENVFILE stop \
+  ckan ckan_gather_harvester ckan_fetch_harvester ckan_run_harvester
+
+# 2. Drop the dead PostGIS table first, so the dump carries no PostGIS
+#    dependency at all and the 3.3 -> 3.6 jump becomes irrelevant.
+#    ckanext-spatial no longer reads or writes it.
+docker exec -t db psql -U ckan -d ckan -c "DROP TABLE IF EXISTS package_extent"
+
+# 3. Dump, while still on PostgreSQL 11.
+docker exec -t db pg_dump -U ckan -Fc ckan      > /tmp/ckan.dump
+docker exec -t db pg_dump -U ckan -Fc datastore > /tmp/datastore.dump
+
+# 4. Replace the volume. THIS DESTROYS THE OLD DATABASE - keep the dumps.
+docker compose --env-file $ENVFILE rm -f -s db
+docker volume rm docker_pg_data
+docker compose --env-file $ENVFILE up -d db      # now PostgreSQL 16
+
+# 5. Restore. The init scripts already recreate the `ckan` and `datastore_ro`
+#    roles and an empty `ckan`/`datastore` pair, so restore with --no-owner
+#    and --clean to avoid ownership and duplicate-object noise.
+docker exec -i db pg_restore -U ckan -d ckan      --no-owner --clean --if-exists < /tmp/ckan.dump
+docker exec -i db pg_restore -U ckan -d datastore --no-owner --clean --if-exists < /tmp/datastore.dump
+
+# 6. Re-grant the datastore read-only permissions.
+docker compose --env-file $ENVFILE up -d ckan
+docker exec -it ckan ckan -c /srv/app/ckan.ini datastore set-permissions \
+  | docker exec -i db psql -U ckan -d datastore
+```
+
+Then run step 4's `db upgrade` and step 5's `search-index rebuild` as normal.
+
+Notes:
+
+- `pg_dumpall --globals-only` is deliberately **not** used. The init scripts
+  recreate `ckan` and `datastore_ro`; restoring globals on top only produces
+  "role already exists" errors. Dump globals separately if this deployment has
+  grown other roles.
+- CKAN 2.12's CI matrix covers PostgreSQL 14 and 15, not 16. PostgreSQL 16 was
+  tested here directly: `db upgrade` on a clean PostgreSQL 16 database
+  succeeded and applied the core, `ckanext-activity` and `ckanext-harvest`
+  alembic chains. If you would rather stay inside CKAN's tested range, use
+  `postgis/postgis:15-3.6` — same PostGIS, one less major version.
+- PostgreSQL 14 switched the default password hash from `md5` to
+  `scram-sha-256`. The restored roles keep whatever hash they had; new or
+  changed passwords get SCRAM. psycopg2 handles both, so no connection
+  string changes are needed.
+
 ## Known gaps
 
 - **`contrib/docker/migrations/mapp_ckan_1.5.0.sql`** operates on

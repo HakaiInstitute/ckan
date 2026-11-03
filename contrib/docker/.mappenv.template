@@ -113,6 +113,12 @@ CKANEXT__GEOVIEW__OL_VIEWER__FORWARD_OGC_REQUEST_PARAMS =  true
 #############################
 CKAN_IMAGE=hakaiinstitute/ckan
 CKAN_TAG=latest
+# WARNING: `latest` is now PostgreSQL 16 (was 11). PostgreSQL will not start
+# on a data directory written by an older major version, so pulling `latest`
+# onto an un-migrated pg_data volume takes the database down with
+# "database files are incompatible with server".
+# Pin this to the last PostgreSQL 11 dated tag until the dump/restore in
+# UPGRADE_2.9_TO_2.12.md step 10 has been done, then move it back to `latest`.
 DB_IMAGE=hakaiinstitute/postgresql:latest
 SOLR_IMAGE=hakaiinstitute/solr:latest
 
