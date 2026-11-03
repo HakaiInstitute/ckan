@@ -92,6 +92,16 @@
         <filter class="solr.FrenchLightStemFilterFactory" />
       </analyzer>
     </fieldType>
+    <!-- Geospatial field for ckanext-spatial's solr-spatial-field backend.
+         spatialContextFactory=JTS is what allows arbitrary (non-rectangular)
+         polygons; without the JTS jar on the classpath Solr's RPT field only
+         understands points, rectangles and circles. -->
+    <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType"
+               spatialContextFactory="JTS"
+               autoIndex="true"
+               validationRule="repairBuffer0"
+               geo="true" distErrPct="0.025" maxDistErr="0.001"
+               distanceUnits="kilometers" />
   </types>
   <fields>
     <field name="index_id" type="string" indexed="true" stored="true" required="true" />
@@ -179,6 +189,7 @@
     <field name="bbox-east-long" type="float" indexed="true" stored="true" />
     <field name="bbox-west-long" type="float" indexed="true" stored="true" />
     <field name="spatial" type="string" indexed="true" stored="true" />
+    <field name="spatial_geom" type="location_rpt" indexed="true" stored="true" />
     <field name="title_translated" type="text_general" indexed="true" stored="true" />
     <field name="title_en" type="text_general" indexed="true" stored="true" />
     <field name="title_fr" type="text_fr" indexed="true" stored="true" />
