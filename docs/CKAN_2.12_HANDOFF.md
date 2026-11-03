@@ -27,14 +27,13 @@ adcd02f13  Phase 2: add ckanext-hakai and move the scheming/fluent patches into 
 | cioos_theme, cioos_harvest, cioos-siooc-schema | ported |
 | ckanext-mapp | new — the three `mapp_master` branches folded into one extension |
 | ckanext-iys | new — the `iys_master` branch of cioos_theme folded in; the schema branch held nothing |
-| **ckanext-spatial** | **not started** — blocks the full build |
+| ckanext-spatial | merged with `upstream/master` (2.3.2) and ported |
+| Solr spatial_geom + JTS | done, verified by polygon round-trip |
 | Deployment | one `docker-compose.yml` + one env file per site |
 | Phase 2 (de-forking) | four slices done, more possible |
 
-The image builds and **all plugins load on Python 3.14** when ckanext-spatial's
-two layers are removed. With spatial unported the real build fails at
-`pip install -r ckanext-spatial/requirements.txt` because the pinned
-`pyproj==3.6.1` has no cp314 wheel and falls back to a source build needing PROJ.
+The `pyproj==3.6.1` pin that used to break the build is gone: upstream's
+requirements use `pyproj~=3.6`, which resolves to a cp314 wheel.
 
 ## Facts established empirically — do not re-derive
 
@@ -54,8 +53,9 @@ image or source, not from memory.
   recipe is `setuptools<81` + `numpy` preinstalled, then
   `pip install --no-build-isolation "gdal==$(gdal-config --version)"`.
 - The from-source PROJ build the 2.9 image needed is gone: pyproj wheels bundle PROJ.
-- Dead on py3.14: `six`, `past.utils.old_div`, `importlib_metadata` backport,
-  `urllib3.contrib.pyopenssl` (urllib3 2.x dropped it).
+- Dead on py3.14: `past.utils.old_div`, `importlib_metadata` backport,
+  `urllib3.contrib.pyopenssl` (urllib3 2.x dropped it). `six` still works —
+  see the spatial notes below — but is only present transitively.
 
 **Removed CKAN APIs that bit us**
 - `IRoutes` — gone in 2.11.
@@ -93,6 +93,26 @@ image or source, not from memory.
   `harvesters/base.py`, so the ISO parser cannot be swapped. `ISpatialHarvester`
   offers only `get_package_dict`, `get_validators`, `transform_to_iso`.
 
+**Spatial / Solr (learned during the spatial merge)**
+- `six` is **not** dead on py3.14 — 1.17.0 imports fine in the 2.12 image,
+  `six.moves` included. An earlier note here said otherwise. It is still worth
+  removing, because it only arrives as a transitive dependency.
+- Upstream's `str(self.xml_str)` (replacing `six.ensure_str`) is wrong for
+  bytes input — it yields `"b'<?xml...'"`. The merge uses an explicit decode.
+- `html_parser.unescape` has not existed since Python 3.9. The fork's WAF
+  harvester called it; it is now `html.unescape`.
+- Solr's `SpatialRecursivePrefixTreeFieldType` handles **only points,
+  rectangles and circles** unless the JTS jar is on the classpath. CKAN's own
+  `ckan/ckan-solr:2.12-solr9-spatial` image does **not** ship JTS and its
+  `location_rpt` type has no `spatialContextFactory`, so that image cannot do
+  polygon search either. Ours downloads `jts-core` 1.19.0.
+- `get_common_map_config()` strips the `ckanext.spatial.common_map.` prefix and
+  keeps the rest of the key verbatim, so `CKANEXT__SPATIAL__COMMON_MAP__STADIA__API_KEY`
+  reaches JavaScript as `mapConfig['stadia.api_key']`.
+- `stamen` is no longer a leaflet-providers name (Stamen shut down), so
+  upstream's `{type: 'stamen'}` default made its own no-provider branch
+  unreachable.
+
 **Upstream state**
 - Neither `cioos-siooc/ckan` nor `HakaiInstitute/ckan` has started this upgrade:
   all 931 refs still use `ckan/ckan-base:2.9`.
@@ -125,73 +145,50 @@ image or source, not from memory.
   exceptions, raises SyntaxWarning on 3.12+. Left alone because fixing it
   changes exception semantics.
 
-## Next: ckanext-spatial (the blocker)
+## Done: ckanext-spatial
 
-Submodule is at `491eb503` (2.9-era + a .DS_Store cleanup). The upstream merge
-was **aborted** to keep the tree buildable; redo it with
-`git merge upstream/master` in `contrib/docker/src/ckanext-spatial`.
+Merged with `upstream/master` (v2.3.2 + 3 commits) as a real merge commit, so
+the next upstream pull is an ordinary 3-way diff rather than another full
+re-derivation. There is no upstream "2.12 branch" — master is the 2.12 line,
+and its CI matrix tests `ckan/ckan-dev:2.12-py3.14`.
 
-Upstream restructured `public/` → `assets/` (webassets), deleted the Pylons
-controllers, moved `model/harvested_metadata.py` → `harvested_metadata.py`, and
-replaced `SpatialQueryMixin` with a search backend. ~24 paths conflict.
+**Upstream had already absorbed most of what this fork carried.** The `bf`
+boost function is character-for-character the same, and the easting
+adjustment, geometry→envelope coercion, the `resource_locator` protocols map
+and `extras['lineage']` are all upstream now. Do not assume an old fork delta
+still needs porting — diff it first.
 
-### Asset resolution — mechanical, was done once and fully verified
+The big structural change: upstream **deleted** the PostGIS `package_extent`
+table, `geoalchemy_common.py` and the whole `model/` package. That removal is
+what unblocks the postgis-2.1 pin from commit `10343191f`.
 
-1. `git ls-tree -r --name-only upstream/master -- ckanext/spatial/assets ckanext/spatial/public | xargs git checkout upstream/master --`
-2. Copy CIOOS-only assets from `public/` to `assets/`: `js/spatial_form.js`,
-   `js/vendor/leaflet.ajax`, `js/vendor/leaflet.fullscreen`
-3. `git rm -r public/js public/css public/resource.config public/webassets.yml`
-   (keep upstream's `public/img`)
-4. Re-apply the fork diffs for `js/dataset_map.js` and `css/dataset_map.css` —
-   both apply cleanly
-5. `js/spatial_query.js`: take the fork's version wholesale (it rewrote it, +244/-94)
-6. `js/common_map.js`: keep upstream's leaflet-providers chain but replace
-   upstream's "no provider set" else-branch with the fork's Stadia TileLayer
-   (the deployment relies on `ckanext.spatial.common_map.stadia.API_key`), and
-   change the default from `{type:'stamen'}` to `{}` so that branch is
-   reachable — `stamen` is not a leaflet-providers name since Stamen shut down
-7. `css/spatial_query.css`: keep the fork's `#dataset-map-form-container`
-   selectors and 225px with upstream's `font-size: 14px`; use upstream's
-   relative `../img/pencil.png`; keep **both** `#draw-map-container` and
-   `.dataset-map-expanded #dataset-map` rules
-8. `webassets.yml`: upstream's bundles with versioned vendor paths
-   (`leaflet/1.9.3`, `leaflet.draw/0.4.14`) plus `leaflet-providers.js`, plus
-   the fork's leaflet.fullscreen/leaflet.ajax entries and the
-   `spatial_form_js`/`spatial_form_css` bundles. Verify every path exists.
+What actually had to be carried over:
+- `spatial` **or** `extras_spatial` on index (upstream only checks the latter)
+- a degenerate-bbox fix: a Point indexes to a zero-area envelope, which the
+  `{!frange incl=false l=0}` filter always excludes
+- the three extra helpers, `update_config_schema`, the two `IActions`
+- CIOOS WAF additions, the ISO19115 validators, the ISO19139 parser
+- the `Session.refresh` workaround for ckanext-harvest #151/#262
 
-### Python port — the real work
+**Polygon search was the one piece with no upstream equivalent.** `ext_poly`
+always went through PostGIS `polygon_query()` regardless of the configured
+backend, so it was the last thing keeping the PostGIS table live. It is now a
+Solr `Intersects` against `spatial_geom` on the `solr-spatial-field` backend,
+degrading to the polygon's envelope with a warning on `solr-bbox`. The sites
+moved from `solr` to `solr-spatial-field` to get exact results; this requires
+the full reindex that step 5 of the runbook already performs.
 
-Re-express the fork's `SpatialQuery` against upstream's backend architecture,
-carrying over:
+`model/__init__.py` was a namespace package re-exporting both ISO parsers;
+`ckanext-cioos_theme/helpers.py:387` imported it as `spatial_model` and now
+points at `ckanext.spatial.harvested_metadata`.
 
-- geometry → bbox coercion for Solr, including offsetting Points by 0.00001
-- reading `spatial` **or** `extras_spatial`
-- `ext_poly` polygon search via `validate_polygon`
-- the custom boost-function `bf`
-- `IActions`: `spatial_query_geo`, `spatial_query_geo_package_search`
-- `update_config_schema` for `ckanext.spatial.default_extent`
-- helpers `spatial_widget_expands`, `spatial_default_extent`,
-  `spatial_get_map_initial_max_zoom`
-- drop `IRoutes`
+## Superseded: the old ckanext-spatial plan
 
-Because the backend registry is closed, the clean seam is
-`IPackageController.before_dataset_index` / `before_dataset_search` in a plugin
-ordered **before** `spatial_query`, normalising geometry so spatial's own
-backend then indexes it unchanged.
-
-Nothing from `ckanext-spatial@mapp_master` needs to survive this merge. Its
-only real content was four `ISOElement`s for the MaPP vocabularies plus a
-`thesaurus` element on `ISOKeyword`; those now live in `ckanext-mapp`'s
-`harvest.py`, behind `ISpatialHarvester.get_package_dict`. The branch's other
-two hunks are already on `hakai_master` (the `geojsonlayerurls` case fix, the
-blank-`spatial` filter in `spatial_query.js`), and its `hide_header` flag on
-the spatial_query snippet was never used by any template.
-
-Also unmerged: `harvested_metadata.py` (1 hunk), `harvesters/base.py` (8),
-`harvesters/waf.py` (2), `lib/__init__.py` (3), `views.py` (2),
-`validation/validation.py` (1), 2 templates, `setup.py`, `requirements.txt`.
-Accept upstream's deletions of `controllers/api.py`, the `plugin/` package,
-`tests/ckan_setup.py`, `tests/fixtures.py`, `requirements-py2.txt`.
+The step-by-step asset and Python port recipe that used to live here has
+been carried out; see the two commits in the submodule for what was
+actually done. It is removed rather than kept, because several of its
+premises turned out to be wrong (notably that the `bf` function and the
+easting adjustment still needed porting, and that `six` was dead).
 
 ## Next: Phase 2 remainder
 
