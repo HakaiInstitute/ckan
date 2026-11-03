@@ -6,6 +6,7 @@ separate document: [UPGRADE_2.9_TO_2.12.md](UPGRADE_2.9_TO_2.12.md).
 **Branch:** `ckan-2.12-upgrade` (off `hakai_master`), nothing pushed.
 
 ```
+639dbe960  Collapse the per-site compose files into one, driven by per-site env files
 7dde3e9e9  Phase 2: fold the iys_master branch into ckanext-iys
 f25a7d575  Phase 2: fold the three mapp_master branches into ckanext-mapp
 371ef543f  Phase 2: move the CIOOS-only harvest pieces into the cioos extensions
