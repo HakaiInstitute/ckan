@@ -76,7 +76,11 @@ CKAN__THEME = css/main
 #
 # Spatial
 CKAN__SPATIAL__SPATIAL_WIDGET_EXPANDS = false
-CKANEXT__SPATIAL__SEARCH_BACKEND = solr
+# solr-spatial-field indexes real geometry into the spatial_geom RPT field,
+# which is what makes polygon (ext_poly) search exact. The older `solr`
+# value (now `solr-bbox` upstream) only stores a bounding envelope.
+# Switching this requires a full `ckan search-index rebuild`.
+CKANEXT__SPATIAL__SEARCH_BACKEND = solr-spatial-field
 CKANEXT__SPATIAL__DEFAULT_EXTENT = [[46.0, -180.0], [66.0, -120.0]]
 CKANEXT__SPATIAL__COMMON_MAP__STADIA__API_KEY = CHANGE_ME
 CKAN__CIOOS__RA_JSON_FILE = /base/layers/CHANGE_ME_RA.json

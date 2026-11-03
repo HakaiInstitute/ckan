@@ -153,6 +153,13 @@ the CIOOS additions re-applied (3 field types, 46 fields, 2 dynamic fields,
 and `SynonymFilterFactory` — were removed in Solr 9 and are replaced by their
 `...GraphFilterFactory` equivalents.
 
+The schema also gains a `spatial_geom` field of a new `location_rpt` type, and
+the image now downloads the JTS jar (`jts-core` 1.19.0). Solr's
+`SpatialRecursivePrefixTreeFieldType` only understands points, rectangles and
+circles without JTS on the classpath; JTS is what makes arbitrary-polygon
+searches work. CKAN's own `ckan/ckan-solr:2.12-solr9-spatial` image does not
+ship it, so do not expect to be able to swap that image in instead.
+
 Solr 9 will not read the Solr 8 data directory, and the schema changed, so the
 index must be rebuilt from scratch:
 
@@ -206,13 +213,51 @@ that has been commented out since 2.9 can be enabled if wanted — it is still
 commented out because turning email on is a deployment decision, not an
 upgrade requirement.
 
+## 9. Spatial search moves off PostGIS
+
+This is the biggest behavioural change in the upgrade, and it is why the
+database can finally move past postgis-2.1.
+
+Upstream ckanext-spatial deleted the `package_extent` table, the geoalchemy
+layer and the whole `model/` package, replacing them with Solr search
+backends. Nothing writes to PostGIS any more.
+
+`CKANEXT__SPATIAL__SEARCH_BACKEND` changes from `solr` to
+**`solr-spatial-field`** in all three site env files. The old `solr` value
+still works (upstream renamed it `solr-bbox` and keeps an alias) but it only
+indexes a bounding envelope. `solr-spatial-field` indexes the real geometry
+into `spatial_geom`, which is what makes polygon search exact — previously
+`ext_poly` queries bypassed Solr entirely and went to PostGIS.
+
+The index carries no `spatial_geom` values until a reindex, so **spatial
+search returns nothing until step 5's `search-index rebuild` has run.** Step 5
+already rebuilds from scratch, so no extra step is needed — just do not skip
+it.
+
+After the rebuild, confirm geometry actually landed in the index:
+
+```bash
+sudo docker exec -it solr curl -sG 'http://localhost:8983/solr/ckan/select' \
+  --data-urlencode 'q=spatial_geom:*' --data-urlencode 'rows=0' \
+  --data-urlencode 'wt=json'
+```
+
+A `numFound` of 0 means no dataset has an indexed extent — check that
+`spatial_metadata` and `spatial_query` are both in `CKAN__PLUGINS`.
+
+The `package_extent` table and the postgis extension can be dropped once the
+upgrade is confirmed good, but leaving them costs nothing and keeps a
+rollback possible.
+
 ## Known gaps
 
-- **`ckanext-spatial` is not ported.** Its `SpatialQuery` plugin has to be
-  re-expressed against upstream's new pluggable search backend, and upstream
-  restructured `public/` into `assets/` and deleted the Pylons controllers.
-  Until this is done the image does not build. The resume notes live in the
-  task list for this work.
+- **`contrib/docker/migrations/mapp_ckan_1.5.0.sql`** operates on
+  `package_extra`, which CKAN 2.12 dropped, so it cannot be run as-is against
+  a 2.12 database. It is a one-off 2.9-era data migration still sitting on the
+  parent repo's `MaPP_master` branch.
+- **`docker-compose.local.yml`** is still 2.9-era (`/usr/lib/ckan` paths,
+  `cioos/ckan` image). It is the build-from-source variant and needs its own
+  pass.
 - **`ECV.json`** in `cioos-siooc-schema` has a trailing comma and is not valid
   JSON. This predates the upgrade and the file is not copied into the image,
   so it is inert, but it should be fixed or deleted.
