@@ -136,7 +136,19 @@ sudo docker exec -it ckan ckan -c /srv/app/ckan.ini db upgrade
 plugin, so this one command also covers `ckanext-harvest` (which gained an
 alembic chain upstream, including the `a1c0f3d27b41` revision added here to
 recreate two indexes this fork used to declare on its table definitions) and
-`ckanext-activity` if you enabled it.
+`ckanext-activity`.
+
+> **Allow time for the activity migration.** `ckanext-activity`'s
+> `fab3bfdcf830` revision runs a single bulk
+> `UPDATE activity SET permission_labels = '{"public"}'` over every
+> dataset-related row. On a catalogue with years of harvester history that
+> table is large, so this can take a while and generates a lot of WAL. Run it
+> inside the maintenance window rather than being surprised by it.
+>
+> It is safe on an upgraded database: core migration
+> `048_4a7011172b3f_add_activity_streams_tables` still creates the `activity`
+> tables, and the plugin's own migrations only add and populate the new
+> `permission_labels` column.
 
 Verify nothing was missed:
 
