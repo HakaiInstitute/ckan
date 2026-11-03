@@ -129,6 +129,11 @@ RUN pip3 install -e $SRC_DIR/ckanext-mapp \
     && cd $SRC_DIR/ckanext-mapp \
     && pybabel compile -d ckanext/mapp/i18n -D ckanext-mapp -l fr
 
+# ckanext-iys, likewise, for the International Year of the Salmon site. It is
+# presentation only: templates and a stylesheet, no i18n catalogue.
+COPY ./contrib/docker/src/ckanext-iys $SRC_DIR/ckanext-iys
+RUN pip3 install -e $SRC_DIR/ckanext-iys
+
 # The CIOOS schemas are maintained in the cioos-siooc-schema submodule and
 # copied into ckanext-hakai's package directory, where scheming reads them as
 # `ckanext.hakai:schemas/<file>`. They used to be copied into ckanext-scheming's

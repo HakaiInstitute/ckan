@@ -191,7 +191,31 @@ The four MaPP fields are declared in `ckan/config/solr/schema.xml`, alongside
 the other sites, but they cannot be left to the catch-all `*` dynamicField:
 that one is single-valued, so a dataset in two sub-regions would fail to index.
 
-## Still on `mapp_master`, and why
+All four are `multiValued`, matching the schema the MaPP deployment already
+runs (parent branch `MaPP_master`). `mapp-theme` and `mapp-sub-theme` are
+single `select` fields and only ever carry one value, but declaring them
+single-valued would turn any legacy multi-valued record into an indexing
+failure.
 
-Nothing. The three `mapp_master` branches are fully represented here. They are
+## Still on the MaPP branches, and why
+
+The three submodule `mapp_master` branches are fully represented here. They are
 left in place for history; nothing in this repository points at them any more.
+
+The **parent repository** also has a `MaPP_master` branch, which holds two
+things this extension does not:
+
+- **`contrib/docker/docker-compose.mapp.yml`.** It differs from the shared
+  `docker-compose.yml` only in the image tag
+  (`hakaiinstitute/ckan:mapp_${CKAN_TAG}`), a few CPU limits and whitespace.
+  Under one-image-many-plugins there is no MaPP image to tag, so it should
+  collapse into the shared compose file plus a MaPP `.env`.
+- **`contrib/docker/migrations/mapp_ckan_1.5.0.sql`.** A one-off 2.9-era data
+  migration that rewrites `contact-info_online-resource` from a bare URL into
+  the JSON blob form and strips `position-name` — the same shape the contact
+  normalisation above produces at read time, for records that predate it. It
+  operates on `package_extra`, **which CKAN 2.12 dropped**, so it cannot be run
+  as-is against a 2.12 database.
+
+Neither has been moved. A shell script and a SQL file are deployment artefacts,
+not extension content.
