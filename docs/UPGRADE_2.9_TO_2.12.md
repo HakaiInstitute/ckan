@@ -4,11 +4,6 @@ This is a large upgrade: three minor versions, a change of base OS, a change of
 Python, a new Solr major version, and the removal of several APIs that this
 deployment relied on. Read the whole document before starting.
 
-> **Status:** `ckanext-spatial` has **not** been ported yet. Until it is, the
-> image will not build — `pip install -r ckanext-spatial/requirements.txt`
-> fails because the pinned `pyproj==3.6.1` has no Python 3.14 wheel. See
-> [Known gaps](#known-gaps).
-
 ## What changed
 
 | | 2.9 | 2.12 |
@@ -80,7 +75,11 @@ cd ~/ckan/contrib/docker/postgresql
 sudo bash ./pg_backup_rotated.sh
 ```
 
-Also snapshot the storage volume — `contrib/docker/backup_ckan_volumes.sh`
+Also snapshot the storage volume — 
+```bash
+cd ~/ckan/contrib/docker
+bash ./backup_ckan_volumes.sh
+```
 covers `docker_ckan_storage`.
 
 This upgrade is **not reversible** by downgrading the image: `ckan db upgrade`
@@ -89,15 +88,37 @@ applies schema and data migrations (notably the `package_extra` change) that
 
 ## 2. Config changes
 
-Only `contrib/docker/production_root_url.ini` is tracked in git;
-`contrib/docker/production.ini` and `contrib/docker/ckan.ini` are gitignored
-deployment-local files (the Dockerfile copies `production.ini` in at build
-time). All three have been updated on this machine, but **the two gitignored
-ones must be updated by hand on every other machine that builds the image** —
-the changes below will not arrive via `git pull`.
+The authoritative config is the one the running container is using, at
+`/srv/app/ckan.ini` inside the `docker_ckan_home` volume. It is not in git —
+it holds generated secrets — so it does not arrive via `git pull` and has to
+be refreshed on every machine that builds the image.
 
-The running deployment also keeps its live config in the `docker_ckan_home`
-volume at `/srv/app/ckan.ini`; step 5 replaces that volume wholesale.
+The Dockerfile copies `contrib/docker/ckan.ini` to `/srv/app/ckan.ini` at
+build time, so export the live file into place before editing it:
+
+```bash
+cd ~/ckan
+docker cp ckan:/srv/app/ckan.ini contrib/docker/ckan.ini
+cp contrib/docker/ckan.ini contrib/docker/ckan.ini.2.9.bak   # keep the 2.9 original
+```
+
+Make the edits below in `contrib/docker/ckan.ini`. Step 5 rebuilds the image
+and replaces the `docker_ckan_home` volume wholesale, which is what puts the
+edited file back into the container — editing the copy inside the running
+container instead would be thrown away by that step.
+
+`contrib/docker/production_root_url.ini` is the tracked template this file is
+based on. The image-build workflows have no access to the gitignored
+`ckan.ini`, so they materialise one from it:
+
+```yaml
+- run: cp ./contrib/docker/production_root_url.ini ./contrib/docker/ckan.ini
+```
+
+So a CI-built image carries the template, not this deployment's config, and
+relies on the `CKAN__*` environment variables in the site env file for
+anything deployment-specific. Keep the template in step with the edits below,
+or CI-built images will drift from locally-built ones.
 
 Removed:
 
@@ -124,8 +145,10 @@ Changed:
 ckan.views.default_views = image_view text_view datatables_view geo_view geojson_view wmts_view
 ```
 
-`contrib/docker/who.ini`, `who_root_url.ini` and `who_non_root_url.ini` are no
-longer used and the two tracked ones have been deleted.
+`contrib/docker/production.ini` is no longer read by anything — the Dockerfile
+now copies `ckan.ini` — so any local copy is a leftover and can be deleted.
+The same goes for `contrib/docker/who.ini`; `who_root_url.ini` and
+`who_non_root_url.ini` were tracked and have already been deleted.
 
 ### Plugin list
 
@@ -133,9 +156,11 @@ The active plugin list comes from the `CKAN__PLUGINS` environment variable
 (via `ckanext-envvars`), not from the ini file. Before upgrading:
 
 - Replace `recline_view` with `datatables_view`.
-- Add `activity` if you want activity streams. **Add it before running
-  `ckan db upgrade`**, because `db upgrade` only applies migrations for
-  plugins that are currently enabled.
+- `activity` is already listed in the env templates. Keep it there: activity
+  streams left core in 2.10, so without it the Activity tab and the
+  `/dashboard` feed disappear. It must be enabled **before** `db upgrade` in
+  step 6, because `db upgrade` only applies migrations for plugins that are
+  currently enabled.
 - `datatables_view` needs `datastore` to be useful.
 
 ## 3. Stop the writers

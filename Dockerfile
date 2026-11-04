@@ -174,7 +174,13 @@ COPY --from=builder /usr/local /usr/local
 COPY --from=builder $SRC_DIR $SRC_DIR
 
 # Setup CKAN. who.ini is gone: repoze.who was replaced by Flask-Login in 2.10.
-COPY ./contrib/docker/production.ini $CKAN_INI
+#
+# This is the live config, exported from a running container with
+#   docker cp ckan:/srv/app/ckan.ini contrib/docker/ckan.ini
+# It is gitignored, so it does not travel with `git pull` and has to be
+# refreshed on every machine that builds the image. See step 2 of
+# docs/UPGRADE_2.9_TO_2.12.md.
+COPY ./contrib/docker/ckan.ini $CKAN_INI
 COPY ./contrib/docker/crontab $SRC_DIR/ckan/contrib/docker/crontab
 COPY ./contrib/docker/wait-for-postgres.sh /wait-for-postgres.sh
 
