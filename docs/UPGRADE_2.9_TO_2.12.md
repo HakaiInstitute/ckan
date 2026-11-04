@@ -44,6 +44,35 @@ Removed APIs that this deployment used:
   It ships with CKAN but must be listed in `ckan.plugins` to be active, and it
   has its own database migrations.
 
+## Order of operations
+
+The steps below are in dependency order and assume the `db` and `ckan`
+containers are currently running. The order matters in three places:
+
+- The PostgreSQL dump (step 4) has to happen while the database is **still on
+  PostgreSQL 11** and after writers are stopped, so it comes before anything
+  that touches the CKAN image.
+- `ckan db upgrade` (step 6) has to run on the **already-migrated PostgreSQL
+  16** database with the **2.12 image** in place, so it comes after both.
+- `search-index rebuild` (step 7) reads from the database, so it comes after
+  `db upgrade` - and it is what populates `spatial_geom`, without which
+  spatial search returns nothing.
+
+| | Step | Downtime |
+|---|---|---|
+| 1 | Back up | no |
+| 2 | Config changes | no |
+| 3 | Stop ckan + harvesters, leave `db` up | **starts here** |
+| 4 | PostgreSQL 11 → 16 (dump, replace volume, restore) | yes |
+| 5 | Replace `ckan_home`, pull the 2.12 image, start CKAN | yes |
+| 6 | `ckan db upgrade` | yes |
+| 7 | Solr 8 → 9 + `search-index rebuild` | yes |
+| 8 | `ckan asset build` | yes |
+| 9 | Verify | yes |
+| 10 | Restart harvesters | **ends here** |
+
+Steps 1 and 2 are preparation and can be done ahead of the window.
+
 ## 1. Back up first
 
 ```bash
@@ -68,7 +97,7 @@ ones must be updated by hand on every other machine that builds the image** —
 the changes below will not arrive via `git pull`.
 
 The running deployment also keeps its live config in the `docker_ckan_home`
-volume at `/srv/app/ckan.ini`; step 3 replaces that volume wholesale.
+volume at `/srv/app/ckan.ini`; step 5 replaces that volume wholesale.
 
 Removed:
 
@@ -109,7 +138,97 @@ The active plugin list comes from the `CKAN__PLUGINS` environment variable
   plugins that are currently enabled.
 - `datatables_view` needs `datastore` to be useful.
 
-## 3. Rebuild and replace the ckan_home volume
+## 3. Stop the writers
+
+Everything from here changes state. Stop the processes that write to the
+database first, but **leave the `db` container running** - the PostgreSQL
+migration in the next step dumps from it while it is still on 11.
+
+```bash
+cd ~/ckan/contrib/docker
+ENVFILE=./.hakaienv     # or .mappenv / .iysenv
+
+sudo docker compose --env-file $ENVFILE stop \
+  ckan ckan_gather_harvester ckan_fetch_harvester ckan_run_harvester
+
+sudo docker compose --env-file $ENVFILE ps   # db should still be Up
+```
+
+## 4. PostgreSQL 11 → 16
+
+The database image moves from `postgis/postgis:11-3.3` to
+`postgis/postgis:16-3.6`. This was previously blocked: the deployment was
+pinned to an old PostGIS because ckanext-spatial needed it. Nothing uses
+PostGIS now, so the pin is gone.
+
+**PostgreSQL will not start on a data directory written by an older major
+version.** Pointing the new image at the existing `pg_data` volume fails with:
+
+```
+FATAL:  database files are incompatible with server
+DETAIL: The data directory was initialized by PostgreSQL version 11,
+        which is not compatible with this version 16.15
+```
+
+So this is a dump and restore, not an image swap.
+
+> **Mind `DB_IMAGE` in the interval before the window.** CI pushes both a
+> dated tag and `latest`, and the env files use `latest`. From the moment a
+> PostgreSQL 16 image is published, any routine `docker compose pull` on a
+> site that has not done this step takes its database down. Pin `DB_IMAGE` to
+> the last PostgreSQL 11 dated tag as soon as this branch merges, and move it
+> back to `latest` here, at the start of this step.
+
+```bash
+cd contrib/docker
+ENVFILE=./.hakaienv     # or .mappenv / .iysenv
+
+# 1. Drop the dead PostGIS table first, so the dump carries no PostGIS
+#    dependency at all and the 3.3 -> 3.6 jump becomes irrelevant.
+#    ckanext-spatial no longer reads or writes it.
+docker exec -t db psql -U ckan -d ckan -c "DROP TABLE IF EXISTS package_extent"
+
+# 2. Dump, while still on PostgreSQL 11.
+docker exec -t db pg_dump -U ckan -Fc ckan      > /tmp/ckan.dump
+docker exec -t db pg_dump -U ckan -Fc datastore > /tmp/datastore.dump
+
+# 3. Replace the volume. THIS DESTROYS THE OLD DATABASE - keep the dumps.
+docker compose --env-file $ENVFILE rm -f -s db
+docker volume rm docker_pg_data
+docker compose --env-file $ENVFILE up -d db      # now PostgreSQL 16
+
+# 4. Restore. The init scripts already recreate the `ckan` and `datastore_ro`
+#    roles and an empty `ckan`/`datastore` pair, so restore with --no-owner
+#    and --clean to avoid ownership and duplicate-object noise.
+docker exec -i db pg_restore -U ckan -d ckan      --no-owner --clean --if-exists < /tmp/ckan.dump
+docker exec -i db pg_restore -U ckan -d datastore --no-owner --clean --if-exists < /tmp/datastore.dump
+
+# 5. Re-grant the datastore read-only permissions.
+docker compose --env-file $ENVFILE up -d ckan
+docker exec -it ckan ckan -c /srv/app/ckan.ini datastore set-permissions \
+  | docker exec -i db psql -U ckan -d datastore
+```
+
+The database now holds the 2.9 schema on PostgreSQL 16. Continue with
+step 5; `db upgrade` in step 6 is what migrates the schema to 2.12.
+
+Notes:
+
+- `pg_dumpall --globals-only` is deliberately **not** used. The init scripts
+  recreate `ckan` and `datastore_ro`; restoring globals on top only produces
+  "role already exists" errors. Dump globals separately if this deployment has
+  grown other roles.
+- CKAN 2.12's CI matrix covers PostgreSQL 14 and 15, not 16. PostgreSQL 16 was
+  tested here directly: `db upgrade` on a clean PostgreSQL 16 database
+  succeeded and applied the core, `ckanext-activity` and `ckanext-harvest`
+  alembic chains. If you would rather stay inside CKAN's tested range, use
+  `postgis/postgis:15-3.6` — same PostGIS, one less major version.
+- PostgreSQL 14 switched the default password hash from `md5` to
+  `scram-sha-256`. The restored roles keep whatever hash they had; new or
+  changed passwords get SCRAM. psycopg2 handles both, so no connection
+  string changes are needed.
+
+## 5. Rebuild and replace the ckan_home volume
 
 The compose files mount `ckan_home:/srv/app`. A named volume is only seeded
 from the image when it is **empty**, so an existing `docker_ckan_home` volume
@@ -117,16 +236,22 @@ will shadow the new image's `/srv/app` entirely — including `ckan.ini`,
 `start_ckan.sh`, `wsgi.py` and every installed extension under `src/`. Pulling
 a new image without clearing that volume silently keeps running 2.9 code.
 
-`clean_reload_ckan.sh` already does the right thing:
+`clean_reload_ckan.sh` already does the right thing. It also stops ckan and
+the harvesters, which step 3 has already done - that is harmless, it just
+makes the script safe to run on its own.
 
 ```bash
 cd ~/ckan/contrib/docker
 sudo docker compose pull ckan
-./clean_reload_ckan.sh          # stops ckan + harvesters, removes docker_ckan_home
+./clean_reload_ckan.sh          # removes docker_ckan_home
 sudo docker compose --env-file ./.hakaienv --compatibility up -d
 ```
 
-## 4. Database migration
+This is the point at which the 2.12 image starts running, against the
+PostgreSQL 16 database restored in step 4 but with the 2.9 schema still in
+place. CKAN will not be fully usable until `db upgrade` in step 6.
+
+## 6. Database migration
 
 ```bash
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini db upgrade
@@ -156,12 +281,13 @@ Verify nothing was missed:
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini db pending-migrations
 ```
 
-## 5. Solr 8 → 9
+## 7. Solr 8 → 9
 
 `contrib/docker/solr/Dockerfile` is now `FROM solr:9`, and the schema at
 `ckan/config/solr/schema.xml` has been rebased onto CKAN 2.12's schema with
-the CIOOS additions re-applied (3 field types, 46 fields, 2 dynamic fields,
-33 copy fields). Two filters the old schema used — `WordDelimiterFilterFactory`
+the CIOOS additions re-applied. It is a strict superset of CKAN's schema -
+nothing removed - adding 51 fields, 4 field types, 2 dynamic fields and 45
+copy fields. Two filters the old schema used — `WordDelimiterFilterFactory`
 and `SynonymFilterFactory` — were removed in Solr 9 and are replaced by their
 `...GraphFilterFactory` equivalents.
 
@@ -185,13 +311,13 @@ sudo docker exec -it ckan ckan -c /srv/app/ckan.ini search-index rebuild
 A full rebuild on a large catalogue takes a while; `search-index rebuild-fast`
 parallelises it if the machine has spare cores.
 
-## 6. Rebuild assets
+## 8. Rebuild assets
 
 ```bash
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini asset build
 ```
 
-## 7. Verify
+## 9. Verify
 
 ```bash
 # every configured plugin loads
@@ -210,11 +336,11 @@ Then check by hand: log in (auth moved to flask-login), load a dataset page
 with a map, run a spatial search, open the metadata entry form, and confirm
 the harvesters are running (`docker logs ckan_gather_harvester`).
 
-## 8. Harvesting
+## 10. Harvesting
 
 Unlike the 2.8 → 2.9 upgrade, there is no need to clear and re-run the
 harvesters: the dataset schema has not changed shape. The Solr index is
-rebuilt from the database in step 5, which is enough.
+rebuilt from the database in step 7, which is enough.
 
 `contrib/docker/crontab` now calls `/usr/local/bin/ckan` instead of
 `/usr/bin/ckan`, and the compose services run Debian's `cron -f` instead of
@@ -225,7 +351,7 @@ that has been commented out since 2.9 can be enabled if wanted — it is still
 commented out because turning email on is a deployment decision, not an
 upgrade requirement.
 
-## 9. Spatial search moves off PostGIS
+## Reference: spatial search moves off PostGIS
 
 This is the biggest behavioural change in the upgrade, and it is why the
 database can finally move past postgis-2.1.
@@ -242,7 +368,7 @@ into `spatial_geom`, which is what makes polygon search exact — previously
 `ext_poly` queries bypassed Solr entirely and went to PostGIS.
 
 The index carries no `spatial_geom` values until a reindex, so **spatial
-search returns nothing until step 5's `search-index rebuild` has run.** Step 5
+search returns nothing until step 7's `search-index rebuild` has run.** Step 7
 already rebuilds from scratch, so no extra step is needed — just do not skip
 it.
 
@@ -260,82 +386,6 @@ A `numFound` of 0 means no dataset has an indexed extent — check that
 The `package_extent` table and the postgis extension can be dropped once the
 upgrade is confirmed good, but leaving them costs nothing and keeps a
 rollback possible.
-
-## 10. PostgreSQL 11 → 16
-
-The database image moves from `postgis/postgis:11-3.3` to
-`postgis/postgis:16-3.6`. This was previously blocked: the deployment was
-pinned to an old PostGIS because ckanext-spatial needed it. Nothing uses
-PostGIS now, so the pin is gone.
-
-**PostgreSQL will not start on a data directory written by an older major
-version.** Pointing the new image at the existing `pg_data` volume fails with:
-
-```
-FATAL:  database files are incompatible with server
-DETAIL: The data directory was initialized by PostgreSQL version 11,
-        which is not compatible with this version 16.15
-```
-
-So this is a dump and restore, not an image swap.
-
-> **Pin `DB_IMAGE` before this step.** CI pushes both a dated tag and
-> `latest`, and the env files use `latest`. Once a PostgreSQL 16 image is
-> published, an ordinary `docker compose pull` on an un-migrated site takes
-> the database down. Pin `DB_IMAGE` to the last PostgreSQL 11 dated tag until
-> you are ready, then move it back.
-
-```bash
-cd contrib/docker
-ENVFILE=./.hakaienv     # or .mappenv / .iysenv
-
-# 1. Stop everything that writes to the database.
-docker compose --env-file $ENVFILE stop \
-  ckan ckan_gather_harvester ckan_fetch_harvester ckan_run_harvester
-
-# 2. Drop the dead PostGIS table first, so the dump carries no PostGIS
-#    dependency at all and the 3.3 -> 3.6 jump becomes irrelevant.
-#    ckanext-spatial no longer reads or writes it.
-docker exec -t db psql -U ckan -d ckan -c "DROP TABLE IF EXISTS package_extent"
-
-# 3. Dump, while still on PostgreSQL 11.
-docker exec -t db pg_dump -U ckan -Fc ckan      > /tmp/ckan.dump
-docker exec -t db pg_dump -U ckan -Fc datastore > /tmp/datastore.dump
-
-# 4. Replace the volume. THIS DESTROYS THE OLD DATABASE - keep the dumps.
-docker compose --env-file $ENVFILE rm -f -s db
-docker volume rm docker_pg_data
-docker compose --env-file $ENVFILE up -d db      # now PostgreSQL 16
-
-# 5. Restore. The init scripts already recreate the `ckan` and `datastore_ro`
-#    roles and an empty `ckan`/`datastore` pair, so restore with --no-owner
-#    and --clean to avoid ownership and duplicate-object noise.
-docker exec -i db pg_restore -U ckan -d ckan      --no-owner --clean --if-exists < /tmp/ckan.dump
-docker exec -i db pg_restore -U ckan -d datastore --no-owner --clean --if-exists < /tmp/datastore.dump
-
-# 6. Re-grant the datastore read-only permissions.
-docker compose --env-file $ENVFILE up -d ckan
-docker exec -it ckan ckan -c /srv/app/ckan.ini datastore set-permissions \
-  | docker exec -i db psql -U ckan -d datastore
-```
-
-Then run step 4's `db upgrade` and step 5's `search-index rebuild` as normal.
-
-Notes:
-
-- `pg_dumpall --globals-only` is deliberately **not** used. The init scripts
-  recreate `ckan` and `datastore_ro`; restoring globals on top only produces
-  "role already exists" errors. Dump globals separately if this deployment has
-  grown other roles.
-- CKAN 2.12's CI matrix covers PostgreSQL 14 and 15, not 16. PostgreSQL 16 was
-  tested here directly: `db upgrade` on a clean PostgreSQL 16 database
-  succeeded and applied the core, `ckanext-activity` and `ckanext-harvest`
-  alembic chains. If you would rather stay inside CKAN's tested range, use
-  `postgis/postgis:15-3.6` — same PostGIS, one less major version.
-- PostgreSQL 14 switched the default password hash from `md5` to
-  `scram-sha-256`. The restored roles keep whatever hash they had; new or
-  changed passwords get SCRAM. psycopg2 handles both, so no connection
-  string changes are needed.
 
 ## Known gaps
 
