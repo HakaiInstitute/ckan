@@ -26,6 +26,10 @@ fl_notes.txt
 who.ini
 production.ini
 ckan.ini
+# Backups of ckan.ini carry the old session secret, so ignore every sibling
+# except the tracked template.
+ckan.ini.*
+!ckan.ini.template
 !ckan/migration/alembic.ini
 .noseids
 *~

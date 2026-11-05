@@ -102,10 +102,27 @@ docker cp ckan:/srv/app/ckan.ini ckan.ini
 cp ckan.ini ckan.ini.2.9.bak   # keep the 2.9 original
 ```
 
-Make the edits below in `contrib/docker/ckan.ini`. Step 5 rebuilds the image
-and replaces the `docker_ckan_home` volume wholesale, which is what puts the
-edited file back into the container — editing the copy inside the running
-container instead would be thrown away by that step.
+`migrate_ckan_ini.py` applies the edits listed below. It works line by line so
+comments survive, backs up to `ckan.ini.bak`, and is idempotent — a second run
+reports nothing to do:
+
+```bash
+cd ~/ckan
+python3 contrib/docker/migrate_ckan_ini.py --dry-run contrib/docker/ckan.ini   # preview
+python3 contrib/docker/migrate_ckan_ini.py contrib/docker/ckan.ini
+```
+
+Read its output. It warns if `ckan.views.default_views` contained a view
+outside the standard set, since that view is dropped and has to be re-added by
+hand, and it leaves a non-empty `SECRET_KEY` alone rather than silently
+invalidating existing sessions.
+
+Step 5 rebuilds the image and replaces the `docker_ckan_home` volume
+wholesale, which is what puts the edited file back into the container —
+editing the copy inside the running container instead would be thrown away by
+that step.
+
+The edits it makes, for reference:
 
 Removed:
 
