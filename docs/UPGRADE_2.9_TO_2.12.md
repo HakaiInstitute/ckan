@@ -14,7 +14,7 @@ deployment relied on. Read the whole document before starting.
 | `ckan` binary | `/usr/bin/ckan` | `/usr/local/bin/ckan` |
 | Container user | uid/gid `92:92` | `ckan:ckan-sys` (503:502) |
 | cron | busybox `crond` | Debian `cron` |
-| Solr | 8 | 9 |
+| Solr | 9 | 9 |
 | Auth | repoze.who + `who.ini` | flask-login |
 | Sessions | `beaker.session.*` | `SECRET_KEY` |
 
@@ -47,9 +47,9 @@ containers are currently running. The order matters in three places:
 - The PostgreSQL dump (step 4) has to happen while the database is **still on
   PostgreSQL 11** and after writers are stopped, so it comes before anything
   that touches the CKAN image.
-- `ckan db upgrade` (step 6) has to run on the **already-migrated PostgreSQL
+- `ckan db upgrade` (step 7) has to run on the **already-migrated PostgreSQL
   16** database with the **2.12 image** in place, so it comes after both.
-- `search-index rebuild` (step 7) reads from the database, so it comes after
+- `search-index rebuild` (step 8) reads from the database, so it comes after
   `db upgrade` - and it is what populates `spatial_geom`, without which
   spatial search returns nothing.
 
@@ -59,12 +59,13 @@ containers are currently running. The order matters in three places:
 | 2 | Config changes | no |
 | 3 | Stop ckan + harvesters, leave `db` up | **starts here** |
 | 4 | PostgreSQL 11 → 16 (dump, replace volume, restore) | yes |
-| 5 | Replace `ckan_home`, pull the 2.12 image, start CKAN | yes |
-| 6 | `ckan db upgrade` | yes |
-| 7 | Solr 8 → 9 + `search-index rebuild` | yes |
-| 8 | `ckan asset build` | yes |
-| 9 | Verify | yes |
-| 10 | Restart harvesters | **ends here** |
+| 5 | Re-own the storage volumes to 503:502 | yes |
+| 6 | Replace `ckan_home`, pull the 2.12 image, start CKAN | yes |
+| 7 | `ckan db upgrade` | yes |
+| 8 | Solr 8 → 9 + `search-index rebuild` | yes |
+| 9 | `ckan asset build` | yes |
+| 10 | Verify | yes |
+| 11 | Restart harvesters | **ends here** |
 
 Steps 1 and 2 are preparation and can be done ahead of the window.
 
@@ -118,7 +119,7 @@ outside the standard set, since that view is dropped and has to be re-added by
 hand, and it leaves a non-empty `SECRET_KEY` alone rather than silently
 invalidating existing sessions.
 
-Step 5 rebuilds the image and replaces the `docker_ckan_home` volume
+Step 6 rebuilds the image and replaces the `docker_ckan_home` volume
 wholesale, which is what puts the edited file back into the container —
 editing the copy inside the running container instead would be thrown away by
 that step.
@@ -209,7 +210,7 @@ The active plugin list comes from the `CKAN__PLUGINS` environment variable
 - `activity` is already listed in the env templates. Keep it there: activity
   streams left core in 2.10, so without it the Activity tab and the
   `/dashboard` feed disappear. It must be enabled **before** `db upgrade` in
-  step 6, because `db upgrade` only applies migrations for plugins that are
+  step 7, because `db upgrade` only applies migrations for plugins that are
   currently enabled.
 - `datatables_view` needs `datastore` to be useful.
 
@@ -312,7 +313,7 @@ docker exec -it ckan ckan -c /srv/app/ckan.ini datastore set-permissions \
 > corrupted some other way and this rewrite would damage it further.
 
 The database now holds the 2.9 schema on PostgreSQL 16. Continue with
-step 5; `db upgrade` in step 6 is what migrates the schema to 2.12.
+step 5; `db upgrade` in step 7 is what migrates the schema to 2.12.
 
 Notes:
 
@@ -330,7 +331,37 @@ Notes:
   changed passwords get SCRAM. psycopg2 handles both, so no connection
   string changes are needed.
 
-## 5. Rebuild and replace the ckan_home volume
+## 5. Re-own the persistent volumes
+
+The container user changed. The 2.9 Alpine image ran as uid/gid `92:92`; the
+2.12 Debian image runs as `ckan:ckan-sys`, **503:502**. Named volumes keep
+their original ownership, so CKAN cannot write to its own storage until they
+are re-owned, and the first page render dies with:
+
+```
+PermissionError: [Errno 13] Permission denied:
+  '/var/lib/ckan/webassets/.webassets-cache/...'
+```
+
+The API keeps working, which makes this easy to misread as a template bug.
+
+```bash
+for v in docker_ckan_storage docker_ckan_config; do
+  docker run --rm -v "$v":/data alpine chown -R 503:502 /data
+done
+```
+
+Check it took:
+
+```bash
+docker run --rm -v docker_ckan_storage:/data alpine \
+  sh -c 'stat -c "%u:%g" /data/*'     # expect 503:502
+```
+
+`docker_ckan_home` does not need this: step 6 deletes and reseeds it from the
+image, which already has the right ownership.
+
+## 6. Rebuild and replace the ckan_home volume
 
 The compose files mount `ckan_home:/srv/app`. A named volume is only seeded
 from the image when it is **empty**, so an existing `docker_ckan_home` volume
@@ -355,9 +386,9 @@ sudo docker compose --env-file ./.hakaienv --compatibility up -d ckan
 
 This is the point at which the 2.12 image starts running, against the
 PostgreSQL 16 database restored in step 4 but with the 2.9 schema still in
-place. CKAN will not be fully usable until `db upgrade` in step 6.
+place. CKAN will not be fully usable until `db upgrade` in step 7.
 
-## 6. Database migration
+## 7. Database migration
 
 ```bash
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini db upgrade
@@ -387,7 +418,7 @@ Verify nothing was missed:
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini db pending-migrations
 ```
 
-## 7. Solr 8 → 9
+## 8. Solr 8 → 9
 
 `contrib/docker/solr/Dockerfile` is now `FROM solr:9`, and the schema at
 `ckan/config/solr/schema.xml` has been rebased onto CKAN 2.12's schema with
@@ -417,13 +448,13 @@ sudo docker exec -it ckan ckan -c /srv/app/ckan.ini search-index rebuild
 A full rebuild on a large catalogue takes a while; `search-index rebuild-fast`
 parallelises it if the machine has spare cores.
 
-## 8. Rebuild assets
+## 9. Rebuild assets
 
 ```bash
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini asset build
 ```
 
-## 9. Verify
+## 10. Verify
 
 ```bash
 # every configured plugin loads
@@ -442,11 +473,11 @@ Then check by hand: log in (auth moved to flask-login), load a dataset page
 with a map, run a spatial search, open the metadata entry form, and confirm
 the harvesters are running (`docker logs ckan_gather_harvester`).
 
-## 10. Harvesting
+## 11. Harvesting
 
 Unlike the 2.8 → 2.9 upgrade, there is no need to clear and re-run the
 harvesters: the dataset schema has not changed shape. The Solr index is
-rebuilt from the database in step 7, which is enough.
+rebuilt from the database in step 8, which is enough.
 
 `contrib/docker/crontab` now calls `/usr/local/bin/ckan` instead of
 `/usr/bin/ckan`, and the compose services run Debian's `cron -f` instead of
@@ -474,7 +505,7 @@ into `spatial_geom`, which is what makes polygon search exact — previously
 `ext_poly` queries bypassed Solr entirely and went to PostGIS.
 
 The index carries no `spatial_geom` values until a reindex, so **spatial
-search returns nothing until step 7's `search-index rebuild` has run.** Step 7
+search returns nothing until step 8's `search-index rebuild` has run.** Step 8
 already rebuilds from scratch, so no extra step is needed — just do not skip
 it.
 
