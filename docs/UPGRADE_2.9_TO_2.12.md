@@ -107,9 +107,9 @@ comments survive, backs up to `ckan.ini.bak`, and is idempotent — a second run
 reports nothing to do:
 
 ```bash
-cd ~/ckan
-python3 contrib/docker/migrate_ckan_ini.py --dry-run contrib/docker/ckan.ini   # preview
-python3 contrib/docker/migrate_ckan_ini.py contrib/docker/ckan.ini
+cd ~/ckan/contrib/docker
+python3 migrate_ckan_ini.py --dry-run ckan.ini   # preview
+python3 migrate_ckan_ini.py ckan.ini
 ```
 
 Read its output. It warns if `ckan.views.default_views` contained a view
@@ -232,28 +232,55 @@ ENVFILE=./.hakaienv     # or .mappenv / .iysenv
 # 1. Drop the dead PostGIS table first, so the dump carries no PostGIS
 #    dependency at all and the 3.3 -> 3.6 jump becomes irrelevant.
 #    ckanext-spatial no longer reads or writes it.
-docker exec -t db psql -U ckan -d ckan -c "DROP TABLE IF EXISTS package_extent"
+docker exec db psql -U ckan -d ckan -c "DROP TABLE IF EXISTS package_extent"
 
 # 2. Dump, while still on PostgreSQL 11.
-docker exec -t db pg_dump -U ckan -Fc ckan      > /tmp/ckan.dump
-docker exec -t db pg_dump -U ckan -Fc datastore > /tmp/datastore.dump
+#    NO -t. A TTY rewrites every \n as \r\n on the way out, which silently
+#    corrupts a -Fc dump and makes pg_restore fail with
+#    "could not read from input file: end of file".
+docker exec db pg_dump -U ckan -Fc ckan      > /tmp/ckan.dump
+docker exec db pg_dump -U ckan -Fc datastore > /tmp/datastore.dump
 
-# 3. Replace the volume. THIS DESTROYS THE OLD DATABASE - keep the dumps.
+# 3. VERIFY THE DUMPS BEFORE DESTROYING ANYTHING. --list parses the whole
+#    archive without touching the database; if it prints a TOC the dump is
+#    readable. Do not continue if either of these fails.
+docker exec -i db pg_restore --list < /tmp/ckan.dump      | tail -5
+docker exec -i db pg_restore --list < /tmp/datastore.dump | tail -5
+
+# 4. Replace the volume. THIS DESTROYS THE OLD DATABASE - keep the dumps.
 docker compose --env-file $ENVFILE rm -f -s db
 docker volume rm docker_pg_data
+docker compose --env-file $ENVFILE build db
 docker compose --env-file $ENVFILE up -d db      # now PostgreSQL 16
 
-# 4. Restore. The init scripts already recreate the `ckan` and `datastore_ro`
+# 5. Restore. The init scripts already recreate the `ckan` and `datastore_ro`
 #    roles and an empty `ckan`/`datastore` pair, so restore with --no-owner
 #    and --clean to avoid ownership and duplicate-object noise.
 docker exec -i db pg_restore -U ckan -d ckan      --no-owner --clean --if-exists < /tmp/ckan.dump
 docker exec -i db pg_restore -U ckan -d datastore --no-owner --clean --if-exists < /tmp/datastore.dump
 
-# 5. Re-grant the datastore read-only permissions.
+# 6. Re-grant the datastore read-only permissions.
 docker compose --env-file $ENVFILE up -d ckan
 docker exec -it ckan ckan -c /srv/app/ckan.ini datastore set-permissions \
   | docker exec -i db psql -U ckan -d datastore
 ```
+
+> **If `pg_restore` says "could not read from input file: end of file"**, the
+> dump was taken with `docker exec -t` and the TTY mangled it. It is
+> recoverable without re-dumping, because the mangling is exactly reversible —
+> every `\n` became `\r\n`, so no bare `\n` survives:
+>
+> ```bash
+> python3 -c "
+> import sys
+> d = open('/tmp/ckan.dump','rb').read()
+> assert d.count(b'\n') == d.count(b'\r\n'), 'not TTY mangling - do not use this'
+> open('/tmp/ckan.fixed.dump','wb').write(d.replace(b'\r\n', b'\n'))"
+> docker exec -i db pg_restore --list < /tmp/ckan.fixed.dump | head -5
+> ```
+>
+> The assert is the safety check: if any bare `\n` is present the file was
+> corrupted some other way and this rewrite would damage it further.
 
 The database now holds the 2.9 schema on PostgreSQL 16. Continue with
 step 5; `db upgrade` in step 6 is what migrates the schema to 2.12.
