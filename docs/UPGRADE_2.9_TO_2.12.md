@@ -97,28 +97,15 @@ The Dockerfile copies `contrib/docker/ckan.ini` to `/srv/app/ckan.ini` at
 build time, so export the live file into place before editing it:
 
 ```bash
-cd ~/ckan
-docker cp ckan:/srv/app/ckan.ini contrib/docker/ckan.ini
-cp contrib/docker/ckan.ini contrib/docker/ckan.ini.2.9.bak   # keep the 2.9 original
+cd ~/ckan/contrib/docker
+docker cp ckan:/srv/app/ckan.ini ckan.ini
+cp ckan.ini ckan.ini.2.9.bak   # keep the 2.9 original
 ```
 
 Make the edits below in `contrib/docker/ckan.ini`. Step 5 rebuilds the image
 and replaces the `docker_ckan_home` volume wholesale, which is what puts the
 edited file back into the container — editing the copy inside the running
 container instead would be thrown away by that step.
-
-`contrib/docker/production_root_url.ini` is the tracked template this file is
-based on. The image-build workflows have no access to the gitignored
-`ckan.ini`, so they materialise one from it:
-
-```yaml
-- run: cp ./contrib/docker/production_root_url.ini ./contrib/docker/ckan.ini
-```
-
-So a CI-built image carries the template, not this deployment's config, and
-relies on the `CKAN__*` environment variables in the site env file for
-anything deployment-specific. Keep the template in step with the edits below,
-or CI-built images will drift from locally-built ones.
 
 Removed:
 
@@ -149,6 +136,23 @@ ckan.views.default_views = image_view text_view datatables_view geo_view geojson
 now copies `ckan.ini` — so any local copy is a leftover and can be deleted.
 The same goes for `contrib/docker/who.ini`; `who_root_url.ini` and
 `who_non_root_url.ini` were tracked and have already been deleted.
+
+> **Developer note, not an upgrade step.** Nothing here needs doing during a
+> normal upgrade — it only matters if you are changing how the image is built.
+>
+> `contrib/docker/production_root_url.ini` is the tracked template
+> `ckan.ini` is based on. The image-build workflows have no access to the
+> gitignored `ckan.ini`, so they materialise one from it:
+>
+> ```yaml
+> - run: cp ./contrib/docker/production_root_url.ini ./contrib/docker/ckan.ini
+> ```
+>
+> So a CI-built image carries the template, not this deployment's config, and
+> relies on the `CKAN__*` environment variables in the site env file for
+> anything deployment-specific. If you add a setting above that an image must
+> carry even without env vars, add it to the template too, or CI-built images
+> will drift from locally-built ones.
 
 ### Plugin list
 
