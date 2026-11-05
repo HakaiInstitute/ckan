@@ -1,5 +1,16 @@
 #
-# CKAN - Pylons configuration
+# CKAN configuration template.
+#
+# This is the tracked starting point for `contrib/docker/ckan.ini`, which the
+# Dockerfile copies to /srv/app/ckan.ini at build time. ckan.ini itself is
+# gitignored because it holds generated secrets, so the image-build workflows
+# materialise one from this file:
+#
+#     cp ./contrib/docker/ckan.ini.template ./contrib/docker/ckan.ini
+#
+# A CI-built image therefore carries this template, not any one deployment's
+# config, and relies on the CKAN__* environment variables in the site env file
+# for anything deployment-specific. Keep the two in step.
 #
 # These are some of the configuration options available for your CKAN
 # instance. Check the documentation in 'doc/configuration.rst' or at the
@@ -89,6 +100,7 @@ ckan.group_and_organization_list_max = 1000
 #		same origin policy
 ckan.plugins = envvars
             #   stats
+            #   activity
             #   text_view
             #   image_view
             #   datatables_view

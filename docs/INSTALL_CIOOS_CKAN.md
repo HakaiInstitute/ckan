@@ -210,7 +210,7 @@ If your CKAN installation will run at the root of your domain, for example <http
 
 ```bash
 cd ~/ckan/contrib/docker/
-cp production_root_url.ini production.ini
+cp ckan.ini.template ckan.ini
 ```
 
 ### Installing CKAN off the root of a website

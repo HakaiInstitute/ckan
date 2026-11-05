@@ -131,7 +131,7 @@ image or source, not from memory.
   a new image without clearing it silently keeps running old code.
   `clean_reload_ckan.sh` removes it.
 - **`production.ini` and `ckan.ini` are gitignored.** Only
-  `production_root_url.ini` is tracked. Config changes do not travel via
+  `ckan.ini.template` is tracked. Config changes do not travel via
   `git pull`; they must be applied by hand wherever the image is built.
   The Dockerfile copies the gitignored `production.ini` at build time.
 - **The site env files are gitignored too.** `.hakaienv`, `.mappenv` and

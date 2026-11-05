@@ -140,12 +140,12 @@ The same goes for `contrib/docker/who.ini`; `who_root_url.ini` and
 > **Developer note, not an upgrade step.** Nothing here needs doing during a
 > normal upgrade — it only matters if you are changing how the image is built.
 >
-> `contrib/docker/production_root_url.ini` is the tracked template
-> `ckan.ini` is based on. The image-build workflows have no access to the
+> `contrib/docker/ckan.ini.template` is the tracked template `ckan.ini`
+> is based on. The image-build workflows have no access to the
 > gitignored `ckan.ini`, so they materialise one from it:
 >
 > ```yaml
-> - run: cp ./contrib/docker/production_root_url.ini ./contrib/docker/ckan.ini
+> - run: cp ./contrib/docker/ckan.ini.template ./contrib/docker/ckan.ini
 > ```
 >
 > So a CI-built image carries the template, not this deployment's config, and
