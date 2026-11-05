@@ -52,6 +52,16 @@ DEFAULT_VIEWS_VALUE = (
     "image_view text_view datatables_view geo_view geojson_view wmts_view"
 )
 
+# CKAN loads ckan.plugins from the ini *before* any plugin runs
+# (ckan/config/environment.py calls p.load_all(), which reads
+# config['ckan.plugins']). ckanext-envvars then runs as an IConfigurer and only
+# loads names from CKAN__PLUGINS that are not already loaded - it never unloads
+# anything. So a full list left in the ini becomes a floor the env var cannot
+# lower, and a 2.9 list keeps dragging recline_view in, which has no entry
+# point in 2.12. Reducing it to `envvars` hands control to CKAN__PLUGINS.
+PLUGINS_KEY = "ckan.plugins"
+PLUGINS_VALUE = "envvars"
+
 SECTION_RE = re.compile(r"^\s*\[(?P<name>[^]]+)\]\s*$")
 
 
@@ -105,6 +115,29 @@ def migrate(text: str) -> tuple[str, list[str], list[str]]:
                     "invalidates existing sessions."
                 )
             out.append(line)
+            continue
+
+        if key == PLUGINS_KEY:
+            current = line.partition("=")[2].strip()
+            if current == PLUGINS_VALUE:
+                out.append(line)
+                continue
+            if "envvars" not in current.split():
+                warnings.append(
+                    f"{PLUGINS_KEY} does not list `envvars`, so this "
+                    f"deployment does not drive plugins from the environment. "
+                    f"Left as is — remove recline_view by hand."
+                )
+                out.append(line)
+                continue
+            changes.append(
+                f"changed  {PLUGINS_KEY}\n"
+                f"           from: {current}\n"
+                f"           to:   {PLUGINS_VALUE}\n"
+                f"           (CKAN__PLUGINS now governs; the ini list was a\n"
+                f"            floor the env var could not lower)"
+            )
+            out.append(f"{PLUGINS_KEY} = {PLUGINS_VALUE}\n")
             continue
 
         if key == DEFAULT_VIEWS_KEY:

@@ -112,7 +112,8 @@ python3 migrate_ckan_ini.py --dry-run ckan.ini   # preview
 python3 migrate_ckan_ini.py ckan.ini
 ```
 
-Read its output. It warns if `ckan.views.default_views` contained a view
+Read its output. It reduces `ckan.plugins` to `envvars` (see the note
+below), warns if `ckan.views.default_views` contained a view
 outside the standard set, since that view is dropped and has to be re-added by
 hand, and it leaves a non-empty `SECRET_KEY` alone rather than silently
 invalidating existing sessions.
@@ -175,6 +176,24 @@ The same goes for `contrib/docker/who.ini`; `who_root_url.ini` and
 
 The active plugin list comes from the `CKAN__PLUGINS` environment variable
 (via `ckanext-envvars`), not from the ini file. Before upgrading:
+
+> **`ckan.plugins` in the ini is a floor the env var cannot lower.** CKAN
+> reads `ckan.plugins` from the ini and calls `load_all()` *before* any plugin
+> runs. `ckanext-envvars` only executes later, as an `IConfigurer`, and its
+> loop just loads names from `CKAN__PLUGINS` that are not already loaded — it
+> never unloads anything. So anything listed in the ini stays loaded no matter
+> what the env file says.
+>
+> An ini exported from a 2.9 container has the full resolved list in it, which
+> is why `recline_view` keeps coming back and startup fails with
+> `PluginNotFoundException`. `ckan.plugins` must be reduced to just:
+>
+> ```ini
+> ckan.plugins = envvars
+> ```
+>
+> `migrate_ckan_ini.py` does this, and refuses to if `envvars` is not already
+> in the list — that would mean the deployment is not env-driven at all.
 
 - Replace `recline_view` with `datatables_view`.
 - `activity` is already listed in the env templates. Keep it there: activity
@@ -315,9 +334,13 @@ makes the script safe to run on its own.
 
 ```bash
 cd ~/ckan/contrib/docker
+
+sudo docker compose build ckan
+or
 sudo docker compose pull ckan
+
 ./clean_reload_ckan.sh          # removes docker_ckan_home
-sudo docker compose --env-file ./.hakaienv --compatibility up -d
+sudo docker compose --env-file ./.hakaienv --compatibility up -d ckan
 ```
 
 This is the point at which the 2.12 image starts running, against the
