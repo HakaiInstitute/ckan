@@ -194,6 +194,16 @@ The active plugin list comes from the `CKAN__PLUGINS` environment variable
 >
 > `migrate_ckan_ini.py` does this, and refuses to if `envvars` is not already
 > in the list — that would mean the deployment is not env-driven at all.
+>
+> The same trap applies to `scheming.*`. Those keys are read by scheming
+> inside its own `update_config`, and `update_config()` calls every
+> `IConfigurer` in turn, so whether `envvars` has already run comes down to
+> iteration order. A stale `ckanext.scheming:group.json` left in the ini wins
+> often enough to abort startup with `SchemingException: Could not load`.
+> The script rewrites those paths to `ckanext.hakai:` too.
+>
+> General rule: treat the env file as the place to *set* things, not as a
+> reliable way to *override* a value still present in the ini.
 
 - Replace `recline_view` with `datatables_view`.
 - `activity` is already listed in the env templates. Keep it there: activity

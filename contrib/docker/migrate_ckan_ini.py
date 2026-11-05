@@ -62,7 +62,51 @@ DEFAULT_VIEWS_VALUE = (
 PLUGINS_KEY = "ckan.plugins"
 PLUGINS_VALUE = "envvars"
 
+# The CIOOS schemas moved out of ckanext-scheming's package directory into
+# ckanext-hakai. The site env file sets these too, but an env var is not a
+# reliable override here: CKAN's update_config() calls every IConfigurer in
+# turn, and scheming reads config[SCHEMA_OPTION] inside its own update_config,
+# so whether envvars has already run is down to iteration order. A stale value
+# left in the ini wins often enough to break startup with
+# "SchemingException: Could not load ckanext.scheming:group.json".
+SCHEMING_VALUES = {
+    "scheming.dataset_schemas":
+        "ckanext.hakai:schemas/cioos_siooc_schema.json",
+    "scheming.organization_schemas":
+        "ckanext.hakai:schemas/organization.json",
+    "scheming.group_schemas":
+        "ckanext.hakai:schemas/group.json",
+    "scheming.presets":
+        "ckanext.hakai:presets/hakai_presets.json "
+        "ckanext.scheming:presets.json ckanext.fluent:presets.json",
+}
+
 SECTION_RE = re.compile(r"^\s*\[(?P<name>[^]]+)\]\s*$")
+
+
+def continuation_span(lines: list[str], i: int) -> int:
+    """Index just past any RFC-822 style continuation lines following lines[i].
+
+    configparser treats an indented, non-empty line as a continuation of the
+    previous value, so `scheming.presets` can legitimately span three lines.
+    Reading only the first would both misreport the value and, on rewrite,
+    strand the remaining lines under a key that no longer expects them.
+    """
+    j = i + 1
+    while j < len(lines):
+        line = lines[j]
+        if not line.strip() or not line[:1].isspace():
+            break
+        if line.lstrip().startswith(("#", ";")):
+            break
+        j += 1
+    return j
+
+
+def joined_value(lines: list[str], i: int, end: int) -> str:
+    parts = [lines[i].partition("=")[2].strip()]
+    parts += [lines[k].strip() for k in range(i + 1, end)]
+    return " ".join(part for part in parts if part)
 
 
 def assignment_key(line: str) -> str | None:
@@ -85,7 +129,10 @@ def migrate(text: str) -> tuple[str, list[str], list[str]]:
     views_seen = False
     secret_key_insert_at: int | None = None
 
-    for line in lines:
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        i += 1
         match = SECTION_RE.match(line)
         if match:
             section = match.group("name")
@@ -117,10 +164,30 @@ def migrate(text: str) -> tuple[str, list[str], list[str]]:
             out.append(line)
             continue
 
+        if key in SCHEMING_VALUES:
+            start = i - 1
+            end = continuation_span(lines, start)
+            current = joined_value(lines, start, end)
+            i = end
+            target = SCHEMING_VALUES[key]
+            if current == target:
+                out.extend(lines[start:end])
+                continue
+            changes.append(
+                f"changed  {key}\n"
+                f"           from: {current}\n"
+                f"           to:   {target}"
+            )
+            out.append(f"{key} = {target}\n")
+            continue
+
         if key == PLUGINS_KEY:
-            current = line.partition("=")[2].strip()
+            start = i - 1
+            end = continuation_span(lines, start)
+            current = joined_value(lines, start, end)
+            i = end
             if current == PLUGINS_VALUE:
-                out.append(line)
+                out.extend(lines[start:end])
                 continue
             if "envvars" not in current.split():
                 warnings.append(
@@ -128,7 +195,7 @@ def migrate(text: str) -> tuple[str, list[str], list[str]]:
                     f"deployment does not drive plugins from the environment. "
                     f"Left as is — remove recline_view by hand."
                 )
-                out.append(line)
+                out.extend(lines[start:end])
                 continue
             changes.append(
                 f"changed  {PLUGINS_KEY}\n"
@@ -142,9 +209,12 @@ def migrate(text: str) -> tuple[str, list[str], list[str]]:
 
         if key == DEFAULT_VIEWS_KEY:
             views_seen = True
-            current = line.partition("=")[2].strip()
+            start = i - 1
+            end = continuation_span(lines, start)
+            current = joined_value(lines, start, end)
+            i = end
             if current == DEFAULT_VIEWS_VALUE:
-                out.append(line)
+                out.extend(lines[start:end])
                 continue
             dropped = [
                 v for v in current.split()

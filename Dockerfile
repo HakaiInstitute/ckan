@@ -162,12 +162,21 @@ ENV CKAN_STORAGE_PATH=/var/lib/ckan
 #   cron         — drives contrib/docker/crontab in the ckan_run_harvester
 #                  service. The 2.9 Alpine image provided busybox crond; Debian
 #                  slim ships no cron at all.
+#   postgresql-client — wait-for-postgres.sh calls psql, and without it the
+#                  container loops forever on "psql: command not found",
+#                  never reaching start_ckan.sh. That in turn means SECRET_KEY
+#                  is never generated and every `ckan` command aborts with
+#                  "SECRET_KEY: Missing value". Bookworm ships the 15 client,
+#                  which is fine for the `psql -c '\q'` liveness check; do not
+#                  use it to pg_dump the 16 server, which refuses on version
+#                  mismatch.
 RUN apt-get update && apt-get install --no-install-recommends -y \
         cron \
         libgdal32 \
         libgeos-c1v5 \
         libxml2 \
         libxslt1.1 \
+        postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
