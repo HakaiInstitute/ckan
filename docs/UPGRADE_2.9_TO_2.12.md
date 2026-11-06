@@ -14,7 +14,7 @@ deployment relied on. Read the whole document before starting.
 | `ckan` binary | `/usr/bin/ckan` | `/usr/local/bin/ckan` |
 | Container user | uid/gid `92:92` | `ckan:ckan-sys` (503:502) |
 | cron | busybox `crond` | Debian `cron` |
-| Solr | 9 | 9 |
+| Solr | 10 | 9 |
 | Auth | repoze.who + `who.ini` | flask-login |
 | Sessions | `beaker.session.*` | `SECRET_KEY` |
 
@@ -49,7 +49,7 @@ containers are currently running. The order matters in three places:
   that touches the CKAN image.
 - `ckan db upgrade` (step 7) has to run on the **already-migrated PostgreSQL
   16** database with the **2.12 image** in place, so it comes after both.
-- `search-index rebuild` (step 8) reads from the database, so it comes after
+- `search-index rebuild` (step 9) reads from the database, so it comes after
   `db upgrade` - and it is what populates `spatial_geom`, without which
   spatial search returns nothing.
 
@@ -62,10 +62,11 @@ containers are currently running. The order matters in three places:
 | 5 | Re-own the storage volumes to 503:502 | yes |
 | 6 | Replace `ckan_home`, pull the 2.12 image, start CKAN | yes |
 | 7 | `ckan db upgrade` | yes |
-| 8 | Solr 8 → 9 + `search-index rebuild` | yes |
-| 9 | `ckan asset build` | yes |
-| 10 | Verify | yes |
-| 11 | Restart harvesters | **ends here** |
+| 8 | Fit stored extents onto the globe | yes |
+| 9 | Solr 8 → 9 + `search-index rebuild` | yes |
+| 10 | `ckan asset build` | yes |
+| 11 | Verify | yes |
+| 12 | Restart harvesters | **ends here** |
 
 Steps 1 and 2 are preparation and can be done ahead of the window.
 
@@ -418,7 +419,33 @@ Verify nothing was missed:
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini db pending-migrations
 ```
 
-## 8. Solr 8 → 9
+## 8. Fit stored extents onto the globe
+
+15 datasets have longitudes outside -180..180, either because they use the
+0..360 convention common in oceanography (-165.4 written as 194.6) or because
+the extent straddles the antimeridian. See
+[the reference section](#reference-fitting-extents-onto-the-globe) for what is
+actually going on.
+
+ckanext-spatial repairs these at index time, so **search works either way**.
+What this step fixes is the *stored* value, which is what the map widget, the
+DCAT and schema.org output and the /geo endpoints read.
+
+Report first, then write:
+
+```bash
+docker exec -it ckan ckan -c /srv/app/ckan.ini spatial fit-to-globe
+docker exec -it ckan ckan -c /srv/app/ckan.ini spatial fit-to-globe --commit
+```
+
+Do it before step 9 so the rebuild there picks the corrected extents up in one
+pass. Running it afterwards also works - `package_update` reindexes each
+record it touches - it is just a second pass over the same data.
+
+Newly harvested records do not need this; ckanext-cioos_harvest normalises
+extents on the way in.
+
+## 9. Solr 8 → 9
 
 `contrib/docker/solr/Dockerfile` is now `FROM solr:9`, and the schema at
 `ckan/config/solr/schema.xml` has been rebased onto CKAN 2.12's schema with
@@ -462,13 +489,13 @@ sudo docker exec -it ckan ckan -c /srv/app/ckan.ini search-index rebuild
 A full rebuild on a large catalogue takes a while; `search-index rebuild-fast`
 parallelises it if the machine has spare cores.
 
-## 9. Rebuild assets
+## 10. Rebuild assets
 
 ```bash
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini asset build
 ```
 
-## 10. Verify
+## 11. Verify
 
 ```bash
 # every configured plugin loads
@@ -487,11 +514,11 @@ Then check by hand: log in (auth moved to flask-login), load a dataset page
 with a map, run a spatial search, open the metadata entry form, and confirm
 the harvesters are running (`docker logs ckan_gather_harvester`).
 
-## 11. Harvesting
+## 12. Harvesting
 
 Unlike the 2.8 → 2.9 upgrade, there is no need to clear and re-run the
 harvesters: the dataset schema has not changed shape. The Solr index is
-rebuilt from the database in step 8, which is enough.
+rebuilt from the database in step 9, which is enough.
 
 `contrib/docker/crontab` now calls `/usr/local/bin/ckan` instead of
 `/usr/bin/ckan`, and the compose services run Debian's `cron -f` instead of
@@ -519,7 +546,7 @@ into `spatial_geom`, which is what makes polygon search exact — previously
 `ext_poly` queries bypassed Solr entirely and went to PostGIS.
 
 The index carries no `spatial_geom` values until a reindex, so **spatial
-search returns nothing until step 8's `search-index rebuild` has run.** Step 8
+search returns nothing until step 9's `search-index rebuild` has run.** Step 9
 already rebuilds from scratch, so no extra step is needed — just do not skip
 it.
 
@@ -559,14 +586,8 @@ This is handled in two places, deliberately:
   stored value is right for the map widget, the DCAT and schema.org output and
   the /geo endpoints - not just for search.
 
-For records already in the database, the index-time fix is ephemeral, so
-repair the stored extras once:
-
-```bash
-docker exec -it ckan ckan -c /srv/app/ckan.ini spatial fit-to-globe            # report
-docker exec -it ckan ckan -c /srv/app/ckan.ini spatial fit-to-globe --commit   # write
-docker exec -it ckan ckan -c /srv/app/ckan.ini search-index rebuild
-```
+For records already in the database the index-time fix is ephemeral, so the
+stored extras need repairing once. That is step 8.
 
 ## Known gaps
 
