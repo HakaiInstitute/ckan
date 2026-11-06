@@ -538,16 +538,47 @@ The `package_extent` table and the postgis extension can be dropped once the
 upgrade is confirmed good, but leaving them costs nothing and keeps a
 rollback possible.
 
+## Reference: fitting extents onto the globe
+
+15 datasets had longitudes outside -180..180 and were being dropped from the
+spatial index with "Geometries outside the -180, -90, 180, 90 boundaries are
+not supported". Two different causes, despite the single error message:
+
+- 12 used the 0..360 convention common in oceanography, where -165.4 is
+  written as 194.6. Those just shift by 360.
+- 3 genuinely straddle the antimeridian and have to be split into one polygon
+  per side.
+
+This is handled in two places, deliberately:
+
+- `ckanext-spatial` fits the geometry at index time
+  (`SpatialSearchBackend.fit_to_globe`, via the `antimeridian` package). Only
+  runs when the geometry is out of range. Disable with
+  `ckanext.spatial.fit_antimeridian = false`.
+- `ckanext-cioos_harvest` normalises the extent as it is harvested, so the
+  stored value is right for the map widget, the DCAT and schema.org output and
+  the /geo endpoints - not just for search.
+
+For records already in the database, the index-time fix is ephemeral, so
+repair the stored extras once:
+
+```bash
+docker exec -it ckan ckan -c /srv/app/ckan.ini spatial fit-to-globe            # report
+docker exec -it ckan ckan -c /srv/app/ckan.ini spatial fit-to-globe --commit   # write
+docker exec -it ckan ckan -c /srv/app/ckan.ini search-index rebuild
+```
+
 ## Known gaps
 
-- **15 datasets have longitudes outside -180..180** (values like `194.623`),
-  so ckanext-spatial logs "Geometries outside the -180, -90, 180, 90
-  boundaries are not supported" and indexes the dataset without geometry. They
-  are searchable by text but not by location. Fixing it means normalising the
-  coordinates at the source, or splitting the polygons at the antimeridian.
-  After a clean rebuild 55 of 87 datasets with a `spatial` extra carry
-  geometry; the rest are a mix of this and geometries ckanext-spatial rejects
-  as invalid.
+- **20 datasets have self-intersecting polygons**, all meeting at the same
+  vertex (`-129.0038 48.4236`), which suggests one bad source geometry copied
+  across records. ckanext-spatial rejects them with "Wrong geometry, not
+  indexing", so they are searchable by text but not by location. `make_valid`
+  would repair them mechanically, but it alters the authored shape, so it is
+  left as a decision rather than applied silently.
+
+  After the antimeridian work below, 67 of the 87 datasets with a `spatial`
+  extra carry geometry; these 20 are the entire remainder.
 
 
 - **`contrib/docker/migrations/mapp_ckan_1.5.0.sql`** operates on
