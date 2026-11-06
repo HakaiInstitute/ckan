@@ -615,8 +615,9 @@ stored extras need repairing once. That is step 8.
   docker exec -it ckan ckan -c /srv/app/ckan.ini harvester run
   ```
 
-  Note the field is Hakai-only: it exists on `cioos-siooc-schema@hakai_master`
-  but not on `master`, so no other CIOOS site has it.
+  The field is Hakai-only. It came from `cioos-siooc-schema@hakai_master`,
+  which `master` does not have at all, and now lives in `ckanext-hakai`
+  alongside the rest of the Hakai schemas.
 
 - **20 datasets have self-intersecting polygons**, all meeting at the same
   vertex (`-129.0038 48.4236`), which suggests one bad source geometry copied

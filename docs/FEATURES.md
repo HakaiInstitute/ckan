@@ -17,10 +17,15 @@ via `ckanext-envvars` — there is no per-site image and no per-site branch.
 Each site extension is a plain directory under `contrib/docker/src/`, not a
 submodule:
 
-- **`ckanext-hakai`** — the Hakai/CIOOS schema, fluent presets and the
-  `fluent_text` form snippet. These used to be patches applied inside vendored
-  forks of `ckanext-scheming` and `ckanext-fluent`, which meant those two could
-  never track an upstream tag.
+- **`ckanext-hakai`** — the Hakai schemas, fluent presets and the
+  `fluent_text` form snippet. The presets and snippet used to be patches
+  applied inside vendored forks of `ckanext-scheming` and `ckanext-fluent`,
+  which meant those two could never track an upstream tag. The schemas used to
+  be copied in at image build time from the `cioos-siooc-schema` submodule's
+  `hakai_master` branch, which hid the fact that the branch had diverged from
+  that repository's `master` - including a `topic-category` field no other
+  CIOOS site has. That submodule now tracks `master` and is kept only for its
+  `.wkt` region polygons.
 - **`ckanext-mapp`** — the MaPP schema, templates, map layers and harvester
   customisations. These used to live on a `mapp_master` branch in *three*
   separate checkouts (`ckanext-cioos_theme`, `ckanext-spatial`,

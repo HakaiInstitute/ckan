@@ -1,5 +1,14 @@
 # Setup CKAN
 
+> **Stale: written for CKAN 2.9.** It refers to paths and steps that no longer
+> exist - `/usr/lib/ckan/venv/...`, copying schemas into ckanext-scheming's
+> package directory, and `production.ini`. On 2.12 the schemas ship inside
+> `ckanext-hakai` and the config file is `contrib/docker/ckan.ini`. See
+> [UPGRADE_2.9_TO_2.12.md](UPGRADE_2.9_TO_2.12.md) and
+> [FEATURES.md](FEATURES.md). Kept for the parts that are still accurate, such
+> as harvester configuration.
+
+
 - [Setup CKAN](#setup-ckan)
   - [Linux](#linux)
     - [Install Docker](#install-docker)

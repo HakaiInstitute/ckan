@@ -24,7 +24,8 @@ adcd02f13  Phase 2: add ckanext-hakai and move the scheming/fluent patches into 
 | Debian cron fixes | done |
 | dcat, geoview, pdfview | pinned upstream tags, no local delta |
 | fluent, scheming, harvest | merged with 2.12-tested upstreams |
-| cioos_theme, cioos_harvest, cioos-siooc-schema | ported |
+| cioos_theme, cioos_harvest | ported |
+| cioos-siooc-schema | schemas moved into `ckanext-hakai`; submodule back on `master` |
 | ckanext-mapp | new — the three `mapp_master` branches folded into one extension |
 | ckanext-iys | new — the `iys_master` branch of cioos_theme folded in; the schema branch held nothing |
 | ckanext-spatial | merged with `upstream/master` (2.3.2) and ported |
@@ -196,7 +197,10 @@ Done so far: `ckanext-hakai` created (schemas + fluent presets + fluent_text
 template); CIOOS harvester → `ckanext-cioos_harvest`; harvest templates →
 `ckanext-cioos_theme`; `ckanext-mapp` created, retiring the three `mapp_master`
 branches (cioos_theme, spatial, cioos-siooc-schema); `ckanext-iys` created,
-retiring `ckanext-cioos_theme@iys_master`.
+retiring `ckanext-cioos_theme@iys_master`; the Hakai schemas moved out of
+`cioos-siooc-schema@hakai_master` into `ckanext-hakai`, so that submodule
+tracks `master` again and `hakai_master` can be retired too - its `.wkt`
+files were already byte-identical to `master`.
 
 Guiding rule learned: **check whether a customisation exists on
 `upstream/cioos-siooc` but not `ckan/master`.** If so it is CIOOS-level and
