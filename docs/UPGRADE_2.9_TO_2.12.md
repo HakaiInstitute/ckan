@@ -589,6 +589,10 @@ This is handled in two places, deliberately:
   (`SpatialSearchBackend.fit_to_globe`, via the `antimeridian` package). Only
   runs when the geometry is out of range. Disable with
   `ckanext.spatial.fit_antimeridian = false`.
+- It also repairs self-intersecting geometry with `make_valid`
+  (`SpatialSearchBackend.repair`), which would otherwise be dropped entirely.
+  Disable with `ckanext.spatial.repair_invalid_geometry = false`. Both are
+  index-time only; neither rewrites the stored value.
 - `ckanext-cioos_harvest` normalises the extent as it is harvested, so the
   stored value is right for the map widget, the DCAT and schema.org output and
   the /geo endpoints - not just for search.
@@ -621,13 +625,10 @@ stored extras need repairing once. That is step 8.
 
 - **20 datasets have self-intersecting polygons**, all meeting at the same
   vertex (`-129.0038 48.4236`), which suggests one bad source geometry copied
-  across records. ckanext-spatial rejects them with "Wrong geometry, not
-  indexing", so they are searchable by text but not by location. `make_valid`
-  would repair them mechanically, but it alters the authored shape, so it is
-  left as a decision rather than applied silently.
-
-  After the antimeridian work below, 67 of the 87 datasets with a `spatial`
-  extra carry geometry; these 20 are the entire remainder.
+  across records. ckanext-spatial now repairs these at index time with
+  `make_valid`, which resolves the intersection without moving the extent, so
+  they are searchable again - but the stored geometry is still malformed and
+  worth fixing wherever it is produced.
 
 
 - **`contrib/docker/migrations/mapp_ckan_1.5.0.sql`** operates on
