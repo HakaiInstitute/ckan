@@ -19,8 +19,19 @@ The live plugin list comes from the `CKAN__PLUGINS` environment variable via
 
 ### `schemas/`
 
-The CIOOS schemas, copied in at image build time from the `cioos-siooc-schema`
-submodule, which stays the source of truth.
+The Hakai schemas, owned by this extension - the same arrangement
+`ckanext-mapp` uses for `mapp_schema.json`.
+
+They were previously copied in at image build time from the
+`cioos-siooc-schema` submodule's `hakai_master` branch. That hid a real fork:
+`hakai_master` diverges from that repo's `master` across all four files, about
+a hundred lines, including a `topic-category` field that no other CIOOS site
+has. Keeping a divergence on a branch of a shared submodule is the pattern
+Phase 2 retired for `mapp_master` and `iys_master`, so these follow.
+
+The submodule is still checked out for its `.wkt` region polygons, which are
+byte-identical to `master`, so nothing in the build depends on `hakai_master`
+any more.
 
 They used to be copied into **ckanext-scheming's own package directory** and
 referenced as `ckanext.scheming:cioos_siooc_schema.json`, which meant scheming

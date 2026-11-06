@@ -117,7 +117,11 @@ RUN pip3 install -e $SRC_DIR/ckanext-cioos_theme \
     && pybabel compile -d ckanext/cioos_theme/i18n -D ckanext-cioos_theme -l fr
 
 # ckanext-hakai holds the customisations that used to be patched into the
-# vendored forks. It must be installed after the extensions it overrides.
+# vendored forks, and now the Hakai schemas too - they ship with the extension
+# the same way ckanext-mapp carries mapp_schema.json. They used to be copied
+# in from the cioos-siooc-schema submodule at build time, which hid the fact
+# that its hakai_master branch had diverged from that repo's master.
+# It must be installed after the extensions it overrides.
 COPY ./contrib/docker/src/ckanext-hakai $SRC_DIR/ckanext-hakai
 RUN pip3 install -e $SRC_DIR/ckanext-hakai
 
@@ -133,16 +137,6 @@ RUN pip3 install -e $SRC_DIR/ckanext-mapp \
 # presentation only: templates and a stylesheet, no i18n catalogue.
 COPY ./contrib/docker/src/ckanext-iys $SRC_DIR/ckanext-iys
 RUN pip3 install -e $SRC_DIR/ckanext-iys
-
-# The CIOOS schemas are maintained in the cioos-siooc-schema submodule and
-# copied into ckanext-hakai's package directory, where scheming reads them as
-# `ckanext.hakai:schemas/<file>`. They used to be copied into ckanext-scheming's
-# own package directory and referenced as `ckanext.scheming:<file>`, which meant
-# scheming could never be a plain pinned dependency.
-COPY ./contrib/docker/src/cioos-siooc-schema/cioos-siooc_schema.json $SRC_DIR/ckanext-hakai/ckanext/hakai/schemas/cioos_siooc_schema.json
-COPY ./contrib/docker/src/cioos-siooc-schema/organization.json $SRC_DIR/ckanext-hakai/ckanext/hakai/schemas/
-COPY ./contrib/docker/src/cioos-siooc-schema/ckan_license.json $SRC_DIR/ckanext-hakai/ckanext/hakai/schemas/
-COPY ./contrib/docker/src/cioos-siooc-schema/group.json $SRC_DIR/ckanext-hakai/ckanext/hakai/schemas/
 
 #------------------------------------------------------------------------------#
 FROM ckan/ckan-base:${CKAN_BASE_TAG}
