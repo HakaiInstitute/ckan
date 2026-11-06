@@ -600,10 +600,23 @@ stored extras need repairing once. That is step 8.
 
 - **Every harvested dataset is missing `topic-category`**, which
   `cioos_siooc_schema.json` marks `required: true`. `package_show` omits the
-  key entirely, and any `package_update` on those records - including an edit
-  through the admin UI - fails with "Select at least one". Harvesting itself
-  is unaffected, since it does not round-trip through `package_update`. Either
-  the harvester should populate it or the schema should stop requiring it.
+  key, so any `package_update` on those records - including an edit through
+  the admin UI - fails with "Select at least one" on a field unrelated to
+  whatever is being changed.
+
+  This is stale data, not a harvester bug. All 87 source documents contain
+  `<mri:topicCategory>`, the ISO19115-3 parser reads it, the value (`oceans`)
+  is in the field's choice list, and the harvest chain was verified to emit
+  `topic-category: ['oceans']` end to end. The stored records simply predate
+  the field being in the active schema. `force_import` is already set on the
+  WAF source, so re-harvesting repairs them:
+
+  ```bash
+  docker exec -it ckan ckan -c /srv/app/ckan.ini harvester run
+  ```
+
+  Note the field is Hakai-only: it exists on `cioos-siooc-schema@hakai_master`
+  but not on `master`, so no other CIOOS site has it.
 
 - **20 datasets have self-intersecting polygons**, all meeting at the same
   vertex (`-129.0038 48.4236`), which suggests one bad source geometry copied
