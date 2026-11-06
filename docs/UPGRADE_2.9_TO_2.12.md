@@ -435,12 +435,26 @@ circles without JTS on the classpath; JTS is what makes arbitrary-polygon
 searches work. CKAN's own `ckan/ckan-solr:2.12-solr9-spatial` image does not
 ship it, so do not expect to be able to swap that image in instead.
 
+> **Do this before any `search-index rebuild`.** If the old `solr_data`
+> volume is still mounted, the rebuild happily writes into the 2.9 core: the
+> schema has no `spatial_geom`, so spatial search stays empty, and
+> `data_dict` behaves differently enough to fail with "DocValuesField
+> data_dict is too large". Confirm which schema is live first:
+>
+> ```bash
+> docker exec solr curl -sG 'http://localhost:8983/solr/ckan/schema' \
+>   | python3 -c 'import sys,json;s=json.load(sys.stdin)["schema"];print(s["name"],s["version"])'
+> ```
+>
+> It must say `ckan-2.12`. If it says `ckan 2.9` the volume was not replaced.
+
 Solr 9 will not read the Solr 8 data directory, and the schema changed, so the
 index must be rebuilt from scratch:
 
 ```bash
 sudo docker compose rm -f -s solr
 sudo docker volume rm docker_solr_data
+sudo docker compose build solr
 sudo docker compose up -d solr
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini search-index rebuild
 ```
@@ -525,6 +539,16 @@ upgrade is confirmed good, but leaving them costs nothing and keeps a
 rollback possible.
 
 ## Known gaps
+
+- **15 datasets have longitudes outside -180..180** (values like `194.623`),
+  so ckanext-spatial logs "Geometries outside the -180, -90, 180, 90
+  boundaries are not supported" and indexes the dataset without geometry. They
+  are searchable by text but not by location. Fixing it means normalising the
+  coordinates at the source, or splitting the polygons at the antimeridian.
+  After a clean rebuild 55 of 87 datasets with a `spatial` extra carry
+  geometry; the rest are a mix of this and geometries ckanext-spatial rejects
+  as invalid.
+
 
 - **`contrib/docker/migrations/mapp_ckan_1.5.0.sql`** operates on
   `package_extra`, which CKAN 2.12 dropped, so it cannot be run as-is against
