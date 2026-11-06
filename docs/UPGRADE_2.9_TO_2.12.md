@@ -505,8 +505,15 @@ sudo docker exec -it ckan ckan -c /srv/app/ckan.ini asset build
 ## 11. Verify
 
 ```bash
-# every configured plugin loads
-sudo docker exec -it ckan ckan -c /srv/app/ckan.ini plugin-info
+# every plugin named in CKAN__PLUGINS actually loaded
+sudo docker exec -it ckan python3 -c "
+import json, os, urllib.request
+want = os.environ['CKAN__PLUGINS'].split()
+got = json.load(urllib.request.urlopen(
+    'http://localhost:5000/api/3/action/status_show'))['result']['extensions']
+missing = [p for p in want if p not in got]
+print('configured:', len(want), '| loaded:', len(got))
+print('missing   :', missing or 'none')"
 
 # no migrations outstanding
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini db pending-migrations
@@ -514,8 +521,24 @@ sudo docker exec -it ckan ckan -c /srv/app/ckan.ini db pending-migrations
 # search works and the index is populated
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini search-index check
 
+# every dataset with an extent has indexed geometry
+sudo docker exec -it solr curl -sG 'http://localhost:8983/solr/ckan/select' \
+  --data-urlencode 'q=spatial_geom:*' --data-urlencode 'rows=0'
+
 curl -fsS http://localhost:5000/api/3/action/status_show | jq .result.ckan_version
 ```
+
+> **`ckan plugin-info` is broken in CKAN 2.12.1 and cannot be used here.**
+> `ckan/cli/plugin_info.py` calls `inspect.getargspec`, removed from Python in
+> 3.11, so on the 3.14 base image it dies with
+> `AttributeError: module 'inspect' has no attribute 'getargspec'`. It is a
+> core bug, not a deployment problem, and affects only that one diagnostic
+> command - `ckan/lib/maintain.py` has the same call but on a `@timer([...])`
+> path nothing uses.
+>
+> The check above replaces it and is stronger: `plugin-info` only describes
+> plugins it can load, whereas this compares what is *configured* against what
+> actually *loaded*, so a silently-dropped plugin shows up.
 
 Then check by hand: log in (auth moved to flask-login), load a dataset page
 with a map, run a spatial search, open the metadata entry form, and confirm
