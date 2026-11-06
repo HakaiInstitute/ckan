@@ -438,6 +438,13 @@ docker exec -it ckan ckan -c /srv/app/ckan.ini spatial fit-to-globe
 docker exec -it ckan ckan -c /srv/app/ckan.ini spatial fit-to-globe --commit
 ```
 
+It is idempotent - a second run reports `0 to fit`. It writes to the extras
+column directly rather than through `package_update`, because every harvested
+dataset here is missing `topic-category`, which the schema marks required, so
+`package_update` rejects any edit to them on a field unrelated to the
+geometry. That also means it does not touch the search index, which is why it
+sits immediately before the rebuild.
+
 Do it before step 9 so the rebuild there picks the corrected extents up in one
 pass. Running it afterwards also works - `package_update` reindexes each
 record it touches - it is just a second pass over the same data.
@@ -590,6 +597,13 @@ For records already in the database the index-time fix is ephemeral, so the
 stored extras need repairing once. That is step 8.
 
 ## Known gaps
+
+- **Every harvested dataset is missing `topic-category`**, which
+  `cioos_siooc_schema.json` marks `required: true`. `package_show` omits the
+  key entirely, and any `package_update` on those records - including an edit
+  through the admin UI - fails with "Select at least one". Harvesting itself
+  is unaffected, since it does not round-trip through `package_update`. Either
+  the harvester should populate it or the schema should stop requiring it.
 
 - **20 datasets have self-intersecting polygons**, all meeting at the same
   vertex (`-129.0038 48.4236`), which suggests one bad source geometry copied
