@@ -265,6 +265,35 @@ ENVFILE=./.hakaienv     # or .mappenv / .iysenv
 #    ckanext-spatial no longer reads or writes it.
 docker exec db psql -U ckan -d ckan -c "DROP TABLE IF EXISTS package_extent"
 
+> **Restoring a 2.9 dump over an already-migrated database does not work.**
+> `pg_restore --clean --if-exists` only drops objects that exist *in the
+> dump*, so 2.12-era tables such as `file` survive - but `alembic_version` is
+> in the dump and gets rolled back to the 2.9 revision. `db upgrade` then
+> replays migration `109_…initialize_file_tables` and fails with
+> `DuplicateTable: relation "file" already exists`. The same mismatch also
+> produces `cannot drop constraint package_pkey … because other objects
+> depend on it` during the restore itself.
+>
+> Do not try to force past it with `alembic stamp`: the restored data
+> genuinely needs those migrations - the `package_extra` to `extras` JSONB
+> conversion and `activity.permission_labels` among them - and stamping would
+> mark them applied while leaving the data in 2.9 shape.
+>
+> If you need to re-restore after step 7 has run, reset the database first:
+>
+> ```bash
+> docker compose --env-file $ENVFILE stop \
+>   ckan ckan_gather_harvester ckan_fetch_harvester ckan_run_harvester
+> docker exec db psql -U ckan -d postgres -c "DROP DATABASE ckan WITH (FORCE)"
+> docker exec db psql -U ckan -d postgres -c "CREATE DATABASE ckan OWNER ckan ENCODING 'utf-8'"
+> docker exec -i db pg_restore -U ckan -d ckan --no-owner < ./hakai.dump
+> docker compose --env-file $ENVFILE up -d ckan
+> ```
+>
+> Restoring into an empty database needs no `--clean`, which avoids the
+> constraint-drop error too. Then re-run step 7's `db upgrade` and step 9's
+> `search-index rebuild`.
+
 # 2. Dump, while still on PostgreSQL 11.
 #    NO -t. A TTY rewrites every \n as \r\n on the way out, which silently
 #    corrupts a -Fc dump and makes pg_restore fail with
