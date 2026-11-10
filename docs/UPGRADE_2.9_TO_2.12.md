@@ -550,12 +550,45 @@ sudo docker exec -it ckan ckan -c /srv/app/ckan.ini db pending-migrations
 # search works and the index is populated
 sudo docker exec -it ckan ckan -c /srv/app/ckan.ini search-index check
 
-# every dataset with an extent has indexed geometry
+# every dataset with an extent has indexed geometry (what search uses)
 sudo docker exec -it solr curl -sG 'http://localhost:8983/solr/ckan/select' \
   --data-urlencode 'q=spatial_geom:*' --data-urlencode 'rows=0'
 
+# ...and the GeoJSON the map's extents overlay draws (counts must match)
+sudo docker exec -it solr curl -sG 'http://localhost:8983/solr/ckan/select' \
+  --data-urlencode 'q=spatial:*' --data-urlencode 'rows=0'
+
 curl -fsS http://localhost:5000/api/3/action/status_show | jq .result.ckan_version
 ```
+
+> **Both spatial counts matter, and the first passing does not imply the
+> second.** `spatial_geom` is the indexed geometry that bbox and polygon
+> search run against. `spatial` is the raw GeoJSON that the "Dataset Extents"
+> overlay on the homepage and search maps fetches with `fl=spatial`
+> (`cioos_get_dataset_extents_url`). They are populated by the same indexing
+> pass but are not the same field, and upstream ckanext-spatial deletes
+> `spatial` before the document reaches Solr — reasonably, since it has no use
+> for the GeoJSON once the geometry is in `spatial_geom`:
+>
+> ```python
+> # spatial field is geojson coordinate data, not needed in SOLR either
+> pkg_dict.pop('spatial', None)
+> ```
+>
+> Every merge from upstream re-introduces that, and the overlay then draws
+> nothing. It fails *silently* — the layer's middleware filters empty results
+> out of the response, so there is no console error and no failed request,
+> just a checkbox that appears dead. `search-index check` reports `0 out of N`
+> not indexed throughout, because the documents are indexed; they are only
+> missing a field. The `spatial:*` count above is the only check that catches
+> it.
+>
+> The fix lives on ckanext-spatial's `cioos-siooc` branch, which keeps the
+> field. It is CIOOS-wide, not site-specific: the overlay helper is on every
+> `ckanext-cioos_theme` branch including CIOOS's `upstream/master`, and MaPP's
+> and IYS's spatial branches never had the `pop` at all. **A code fix alone
+> changes nothing** — `spatial` only appears in documents written after it, so
+> a `search-index rebuild` has to follow.
 
 > **`ckan plugin-info` is broken in CKAN 2.12.1 and cannot be used here.**
 > `ckan/cli/plugin_info.py` calls `inspect.getargspec`, removed from Python in
