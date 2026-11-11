@@ -306,7 +306,9 @@ width: 14px;
 .resource-list .resource-item .btn-group .btn{
       border-radius: 0 20px 20px 0;
       height: 100%;
-      border: 1px solid #ddd;
+      /* No border. Bootstrap 3 drew none on .btn-primary, so this matched the
+         row's own grey edge; Bootstrap 5 does, and the two together put a
+         grey outline around the red button. */
   }
 
 .resource-list .resource-item .heading {
