@@ -1,0 +1,174 @@
+/* Hakai 2.0 - a candidate restyle, kept separate from hakai.css so the two
+ * can be compared by switching one setting:
+ *
+ *     CKAN__CIOOS__RA_CSS_PATH = /hakai.css      <- current
+ *     CKAN__CIOOS__RA_CSS_PATH = /hakai2_0.css   <- this
+ *
+ * Everything in hakai.css still applies; this file imports it and then layers
+ * changes on top, so the diff between the two looks is exactly what is below.
+ *
+ * Nothing here is a CKAN 2.12 compatibility fix - those live in
+ * ckanext-cioos_theme's css/ckan_2_12.css and apply either way. These are
+ * design and accessibility choices.
+ *
+ * Contrast ratios quoted below are measured against the colours actually
+ * served, not estimated.
+ */
+@import url("/hakai.css");
+
+/* ==========================================================================
+   1. Accessibility
+   ========================================================================== */
+
+/* 1a. Links inside running text need a cue other than colour (WCAG 1.4.1).
+ *
+ *   link #206b82 vs body text #333333 .... 2.10:1   (needs >= 3:1 if colour
+ *                                                    is the only difference)
+ *   link #206b82 vs white background ..... 6.02:1   (fine on its own)
+ *
+ * CKAN already underlines `.module-content p a:link`, but the dataset
+ * description, the Access and Use block and the sidebar About text all sit
+ * outside `.module-content`, so they were uncovered. Navigation, tags and
+ * buttons are deliberately left undecorated - 1.4.1 is about links embedded
+ * in blocks of text, and underlining every facet would be noise.
+ *
+ * Scoped to prose containers, not to `.module-content` wholesale: CKAN's own
+ * rule is `.module-content p a:link` and that `p` is load-bearing. A rule on
+ * `.module-content a` outranks `.nav a` and `.tag` on specificity, so it ends
+ * up underlining the dataset tabs, the sidebar format list and every keyword
+ * pill - which is noise, and not what 1.4.1 is asking for. */
+.notes a:link,
+.notes a:visited,
+.limitations a:link,
+.limitations a:visited,
+.dataset-item .description a:link,
+.dataset-item .description a:visited {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.notes .truncator-link,
+.limitations .truncator-link {
+  text-decoration: underline;
+}
+
+/* 1b. Dataset titles in a result list are links coloured #333 - identical to
+ * body text - with no underline, so there is no cue at all until hover. A
+ * faint underline that firms up on hover keeps the list calm while making the
+ * targets honest. */
+.dataset-heading a {
+  text-decoration-line: underline;
+  text-decoration-color: rgba(51, 51, 51, 0.25);
+  text-underline-offset: 0.18em;
+}
+
+.dataset-heading a:hover,
+.dataset-heading a:focus-visible {
+  text-decoration-color: currentColor;
+}
+
+/* 1c. Breadcrumb current-page text and separators: #6c757d on the #eee
+ * toolbar measures 4.04:1, under the 4.5:1 required for body-size text.
+ * #595f64 measures 5.10:1. */
+.toolbar .breadcrumb .active,
+.toolbar .breadcrumb li:not(:first-child)::before {
+  color: #595f64;
+}
+
+/* 1d. Focus visibility. Bootstrap's ring is rgba(32,107,130,.25) - a quarter
+ * opacity glow - and CKAN's form controls set `outline: 0` and rely on it
+ * alone, so keyboard focus is easy to lose. Raise the ring, and give links
+ * and tags a real outline since Bootstrap styles none. */
+:root {
+  --bs-focus-ring-color: rgba(32, 107, 130, 0.55);
+  --bs-focus-ring-width: 0.2rem;
+}
+
+a:focus-visible,
+.tag:focus-visible,
+.nav-item > a:focus-visible,
+.nav-aside li a:focus-visible,
+.truncator-link:focus-visible {
+  outline: 2px solid #206b82;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* 1e. Target size (WCAG 2.2, 2.5.8 AA: 24x24 CSS px). Keyword pills compute
+ * to about 21px tall from `padding: 1px 10px` at 12px. Facet rows already
+ * clear it at ~34px. */
+.tag {
+  padding: 4px 10px;
+}
+
+/* ==========================================================================
+   2. Readability
+   ========================================================================== */
+
+/* 2a. Line length. Dataset descriptions run the full ~790px column at 14px,
+ * which is roughly 110 characters a line against the 45-75 that reads
+ * comfortably. A ch-based cap scales with the font rather than fighting it,
+ * and only bites where the measure is genuinely too wide. */
+.notes,
+.limitations,
+.dataset-item .description,
+.module-content > p {
+  max-width: 68ch;
+}
+
+/* The search result summary is an unclassed <div> inside .dataset-content, so
+   there is nothing to hook onto by name. Matching the bare div keeps it off
+   the heading, the DOI line and the format badges, which all carry classes. */
+.dataset-item .dataset-content > div:not([class]) {
+  max-width: 68ch;
+}
+
+/* 2b. The facet sidebar is the densest, most-scanned part of the page and was
+ * also the smallest type on it - 12px against 14px body. 13px costs almost no
+ * vertical space. */
+.nav-simple > li,
+.nav-aside > li {
+  font-size: 0.8125rem;
+}
+
+/* ==========================================================================
+   3. Polish
+   ========================================================================== */
+
+/* 3a. Section headings carry the hierarchy, so the boxes do not have to.
+ *
+ * Note: the review suggested uppercase here and this deliberately does not
+ * use it. All-caps measurably slows reading and hurts most for exactly the
+ * users the rest of this file is meant to help, which would have undercut
+ * the point. Weight, colour and a hairline separate the sections just as
+ * well. */
+.primary > .module > h3,
+#dataset-resources > h3,
+section.tags > h3,
+section.citation > h3,
+section.relationships > h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #4a5156;
+  letter-spacing: 0.01em;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid #e3e5e6;
+}
+
+/* 3b. One soft elevation instead of a hard hairline. Every region currently
+ * reads at the same weight - white box, 1px #ddd, on #eee - so nothing
+ * signals what matters. */
+.box,
+.wrapper,
+.module-content.box {
+  border-color: #e3e5e6;
+  box-shadow:
+    0 1px 2px rgba(16, 24, 32, 0.04),
+    0 4px 12px rgba(16, 24, 32, 0.04);
+}
+
+/* 3c. Give the keyword pills a little room to breathe now that the grey fill
+ * behind them is gone and 1e has made them taller. */
+.tag-list li {
+  margin-bottom: 2px;
+}
