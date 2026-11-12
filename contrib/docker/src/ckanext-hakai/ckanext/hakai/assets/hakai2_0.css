@@ -227,6 +227,32 @@ section.relationships .list-group-item:last-child {
   overflow: hidden;
 }
 
+/* 3f. Even out the sidebar's internal padding.
+ *
+ * Four rules land on .module-content and the sidebar collects all of them,
+ * so no two blocks are padded alike:
+ *
+ *   .module-content                          (0,1,0)  30px   our 2.9 restore
+ *   .module-shallow .module-content          (0,2,0)  10px
+ *   .context-info .module-content            (0,2,0)  15px
+ *   .module > .module-content:nth-child(2n)  (0,3,1)  24px top
+ *
+ * That last one outranks the rest, so whether a block gets 24px or 30px on
+ * top depends on whether it happens to be an even child - which is also why
+ * switching it off puts space back into the main column, where it is quietly
+ * trimming 30px to 24px.
+ *
+ * So leave both core rules alone and override only inside .secondary, at a
+ * specificity that beats (0,3,1). 15px horizontal matches what
+ * `.module-narrow .module-heading` already uses, so content lines up with the
+ * heading above it. */
+.secondary .module-content,
+.secondary .module-shallow .module-content,
+.secondary .context-info .module-content,
+.secondary .module > .module-content:nth-child(2n) {
+  padding: 12px 15px;
+}
+
 /* 3b. One soft elevation instead of a hard hairline. Every region currently
  * reads at the same weight - white box, 1px #ddd, on #eee - so nothing
  * signals what matters. */
