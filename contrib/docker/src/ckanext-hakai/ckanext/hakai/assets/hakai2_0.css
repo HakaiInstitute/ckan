@@ -198,6 +198,10 @@ section.relationships .list-group-item {
   border-left: 0;
   border-right: 0;
   border-radius: 0;
+  /* And its 1rem of horizontal padding, which was the last of the indent in
+     front of the type chip - see 3h. */
+  padding-left: 0;
+  padding-right: 0;
 }
 
 section.relationships .list-group-item:first-child {
@@ -267,23 +271,45 @@ section.relationships .list-group-item:last-child {
   font-size: 1rem;
 }
 
+/* Square the menu column off. The 20px radius was drawn in two places - the
+   row owns the right-hand corners and the button repeats them so its red fill
+   follows the row's edge - so both have to be squared or the button's corners
+   show through the row's. */
+.resource-list .resource-item,
+.resource-list .resource-item:first-child,
+.resource-list .resource-item:last-child,
+.resource-list .resource-item .btn-group .btn {
+  border-radius: 0;
+}
+
 /* 3h. Related Works rows: type first, and flush left.
  *
  * The link is a `.row`, so its two columns can simply be reordered - no
  * markup change, and the DOM keeps title-then-type for screen readers. The
- * indent came from `.row > *` padding stacking on the link's own 10px; the
- * title had nothing to line up with and sat 25px in from its heading.
+ * indent came from `.row > *` padding stacking on the link's own 10px and on
+ * `.list-group-item`'s 1rem one level up; the title had nothing to line up
+ * with and sat 25px in from its heading.
+ *
+ * Centred rather than baseline-aligned: on a title that wraps - which most of
+ * them do - a shared baseline pins the chip to the first line, leaving it
+ * sitting high against the row it labels.
  *
  * The type reads as metadata, not an action, so it loses the outlined-button
  * look it had and becomes a quiet chip. */
 .relationships .relationship-item-link {
   display: flex;
   flex-wrap: nowrap;
-  align-items: baseline;
+  align-items: center;
   gap: 0.75rem;
   padding-left: 0;
   padding-right: 0;
+  /* The 1rem that just came off `.list-group-item` was the rows' vertical
+     breathing room too; 5px back on the link keeps them from touching their
+     separators without reintroducing the indent. */
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
+
 
 /* `.row > *` sets width: 100%, max-width: 100% and flex-shrink: 0 on every
    child, which is what makes these two wrap onto separate lines rather than
@@ -358,6 +384,41 @@ section.relationships .list-group-item:last-child {
      is what separates it from Access and Use above. */
   .primary > .module > div.module-content > #dataset-resources > h3 {
     margin-top: 0;
+  }
+
+  /* The column is only 18rem here, so every pixel the menu button takes comes
+     straight out of the resource name. 36px still clears the 24x24 minimum
+     target size, and the button runs the full height of the row, so it stays
+     comfortably clickable.
+     The name is a `.col-10`, a width fixed at 83.33% that has nothing to do
+     with where the absolutely-positioned button actually starts - it left a
+     dead strip between the two. Sizing it off the button instead hands that
+     strip back to the title and description. */
+  .primary > .module > div.module-content > #dataset-resources
+    .resource-item .resource-menu-toggle {
+    width: 2.25rem;
+  }
+
+  .primary > .module > div.module-content > #dataset-resources
+    .resource-item .heading {
+    width: calc(100% - 2.25rem);
+    /* 60px of that padding was reserved for the format sprite below. */
+    padding-left: 10px;
+  }
+
+  /* The sprite costs 60px - a third of the column - to say something the
+     format is also saying in the resource name and the menu. Hidden the
+     visually-hidden way rather than with `display: none`: CKAN pushes the
+     format name out of view with `text-indent: -900em`, so the span is the
+     only place a screen reader hears it, and display:none would take it out
+     of the accessibility tree along with the picture. */
+  .primary > .module > div.module-content > #dataset-resources
+    .resource-item .format-label {
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    background: none;
+    clip-path: inset(50%);
   }
 }
 
