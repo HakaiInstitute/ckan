@@ -116,13 +116,6 @@ a:focus-visible,
   max-width: 68ch;
 }
 
-/* The search result summary is an unclassed <div> inside .dataset-content, so
-   there is nothing to hook onto by name. Matching the bare div keeps it off
-   the heading, the DOI line and the format badges, which all carry classes. */
-.dataset-item .dataset-content > div:not([class]) {
-  max-width: 68ch;
-}
-
 /* 2b. The facet sidebar is the densest, most-scanned part of the page and was
  * also the smallest type on it - 12px against 14px body. 13px costs almost no
  * vertical space. */
