@@ -271,15 +271,34 @@ section.relationships .list-group-item:last-child {
   font-size: 1rem;
 }
 
-/* Square the menu column off. The 20px radius was drawn in two places - the
-   row owns the right-hand corners and the button repeats them so its red fill
-   follows the row's edge - so both have to be squared or the button's corners
-   show through the row's. */
+/* Round only the outside of the list, at 4px - Bootstrap's own 0.25rem, which
+   is already the radius of every button, select and dropdown menu on the
+   page. The 20px it replaces was drawn in two places, the row owning the
+   right-hand corners and the button repeating them so its red fill follows
+   the row's edge, so the two have to be kept in step or one shows through the
+   other. The rows between stay square: they butt up against each other and
+   overlap by a pixel, so a radius there would only round the seams. */
 .resource-list .resource-item,
-.resource-list .resource-item:first-child,
-.resource-list .resource-item:last-child,
 .resource-list .resource-item .btn-group .btn {
   border-radius: 0;
+}
+
+.resource-list .resource-item:first-child {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+
+.resource-list .resource-item:last-child {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+.resource-list .resource-item:first-child .btn-group .btn {
+  border-top-right-radius: 4px;
+}
+
+.resource-list .resource-item:last-child .btn-group .btn {
+  border-bottom-right-radius: 4px;
 }
 
 /* 3h. Related Works rows: type first, and flush left.
