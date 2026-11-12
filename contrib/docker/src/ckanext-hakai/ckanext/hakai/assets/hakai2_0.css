@@ -143,6 +143,7 @@ a:focus-visible,
  * the point. Weight, colour and a hairline separate the sections just as
  * well. */
 .primary > .module > h3,
+section.access > h3,
 #dataset-resources > h3,
 section.tags > h3,
 section.citation > h3,
@@ -153,6 +154,58 @@ section.relationships > h3 {
   letter-spacing: 0.01em;
   padding-bottom: 0.35em;
   border-bottom: 1px solid #e3e5e6;
+}
+
+/* 3d. Drop the frame around the content in each section. With a rule under
+ * every heading already separating them, the boxes were a second, redundant
+ * divider - and because every one of them used the same 1px #ddd, nothing on
+ * the page was emphasised by having one.
+ *
+ * Access and Use, Citation and Keywords use `table-bordered` / `tag-list`
+ * purely as a frame, so those go entirely. Related Works keeps its row
+ * separators and loses only the outer edge.
+ *
+ * The resource list deliberately keeps its border: the Explore button's
+ * rounded right edge is drawn from the row, so removing it would leave the
+ * button floating. */
+section.access > .table-bordered,
+section.citation > .table-bordered,
+section.tags > .tag-list {
+  border: 0;
+  background-color: transparent;
+}
+
+/* Bootstrap draws `.table-bordered` at two levels - `border-width: 1px 0` on
+   the row and `0 1px` on the cell - so zeroing only the cell leaves a rule
+   above and below each row. Both have to go. */
+section.access > .table-bordered > :not(caption) > *,
+section.citation > .table-bordered > :not(caption) > * {
+  border-width: 0;
+}
+
+section.access > .table-bordered > :not(caption) > * > *,
+section.citation > .table-bordered > :not(caption) > * > * {
+  border-width: 0;
+  padding-left: 0;
+}
+
+section.tags > .tag-list {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+section.relationships .list-group-item {
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+}
+
+section.relationships .list-group-item:first-child {
+  border-top: 0;
+}
+
+section.relationships .list-group-item:last-child {
+  border-bottom: 0;
 }
 
 /* 3b. One soft elevation instead of a hard hairline. Every region currently
