@@ -253,6 +253,106 @@ section.relationships .list-group-item:last-child {
   padding: 12px 15px;
 }
 
+/* 3g. The resource menu. The resource name is itself a link to the resource,
+ * so the dropdown beside it is only ever "more options" - it does not need to
+ * announce itself with a full-width labelled button. A vertical ellipsis is
+ * the conventional affordance for that and gives the row back ~90px, which is
+ * what makes the two-column layout below viable.
+ *
+ * The accessible name now comes from the button's aria-label, since there is
+ * no visible text left to supply one. */
+.resource-list .resource-item .resource-menu-toggle {
+  width: 3.25rem;
+  padding: 0;
+  font-size: 1rem;
+}
+
+/* 3h. Related Works rows: type first, and flush left.
+ *
+ * The link is a `.row`, so its two columns can simply be reordered - no
+ * markup change, and the DOM keeps title-then-type for screen readers. The
+ * indent came from `.row > *` padding stacking on the link's own 10px; the
+ * title had nothing to line up with and sat 25px in from its heading.
+ *
+ * The type reads as metadata, not an action, so it loses the outlined-button
+ * look it had and becomes a quiet chip. */
+.relationships .relationship-item-link {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* `.row > *` sets width: 100%, max-width: 100% and flex-shrink: 0 on every
+   child, which is what makes these two wrap onto separate lines rather than
+   sit side by side. All three have to be undone, not just the width. */
+.relationships .relationship-item-link > .col-md-2,
+.relationships .relationship-item-link > .col-md-10 {
+  width: auto;
+  max-width: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.relationships .relationship-item-link > .col-md-2 {
+  order: -1;
+  flex: 0 0 7.5rem;
+}
+
+.relationships .relationship-item-link > .col-md-10 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.relationships .relationship-item .label-clear-100 {
+  border-color: transparent;
+  background-color: #f1f3f4;
+  color: #5a6065;
+  font-weight: 400;
+}
+
+/* 3i. On a wide screen the description and Access and Use stop at 68ch, which
+ * leaves the right of the column empty. Lift Data and Resources into it.
+ *
+ * Everything defaults to spanning both columns, so only the three blocks that
+ * take part need naming - that way a dataset missing a DOI, a citation or
+ * related works still lays out correctly, rather than the layout depending on
+ * counting rows.
+ *
+ * `dense` is what lets Data and Resources sit beside the description even
+ * though it comes after Access and Use in the markup. The DOM order is
+ * unchanged, so reading and tab order still run description, access, then
+ * resources.
+ *
+ * Only above 1200px: the container is capped at 1170px, so below that there
+ * is no spare width to move anything into and the sections stack as before. */
+@media (min-width: 1200px) {
+  .primary > .module > div.module-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 18rem);
+    column-gap: 2rem;
+    align-items: start;
+    grid-auto-flow: row dense;
+  }
+
+  .primary > .module > div.module-content > * {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .primary > .module > div.module-content > .notes,
+  .primary > .module > div.module-content > section.access {
+    grid-column: 1;
+  }
+
+  .primary > .module > div.module-content > #dataset-resources {
+    grid-column: 2;
+    grid-row: span 2;
+  }
+}
+
 /* 3b. One soft elevation instead of a hard hairline. Every region currently
  * reads at the same weight - white box, 1px #ddd, on #eee - so nothing
  * signals what matters. */
