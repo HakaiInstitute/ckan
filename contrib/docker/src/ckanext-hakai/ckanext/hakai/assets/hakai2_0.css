@@ -208,6 +208,25 @@ section.relationships .list-group-item:last-child {
   border-bottom: 0;
 }
 
+/* 3e. The sidebar's repeat of the dataset title. It carries the generic
+ * heading margins - 20px above, 10px below - which on a title that already
+ * wraps to five lines just pushes the rest of the sidebar down. Clamp it to
+ * three lines too; the full title is still the page's h1 immediately to the
+ * right, and clamping is visual only, so the text stays in the DOM for
+ * screen readers, in-page search and copy/paste.
+ *
+ * -webkit-line-clamp needs the -webkit-box display and vertical orientation
+ * to do anything. `line-clamp` is the standard property that supersedes it
+ * and is listed second so it wins where supported. */
+#package-info .heading {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
 /* 3b. One soft elevation instead of a hard hairline. Every region currently
  * reads at the same weight - white box, 1px #ddd, on #eee - so nothing
  * signals what matters. */
