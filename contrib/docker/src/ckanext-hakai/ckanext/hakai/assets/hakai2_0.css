@@ -351,6 +351,39 @@ section.relationships .list-group-item:last-child {
   min-width: 0;
 }
 
+/* That 7.5rem is a guess at the widest type: it wastes four of them on a
+   dataset whose relationships are all "Parent", and would clip anything
+   longer than it. Shrink-to-fit is what is wanted, but the chips sit in
+   separate rows - each is its own `.list-group-item` wrapping its own link -
+   so nothing inside one row can see how wide the chip two rows down is.
+   Subgrid is what gives them a shared track. The list declares a single
+   `max-content` column, measured against the widest chip in the section, and
+   the row and the link each pass that track down rather than defining tracks
+   of their own. Behind @supports because it is the only part of this that
+   degrades badly - without subgrid the links would lay out as single-column
+   grids - so anything that lacks it keeps the fixed 7.5rem above. */
+@supports (grid-template-columns: subgrid) {
+  .relationships .relationship-list {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .relationships .relationship-item,
+  .relationships .relationship-item-link {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+  }
+
+  .relationships .relationship-item-link > .col-md-2 {
+    grid-column: 1;
+  }
+
+  .relationships .relationship-item-link > .col-md-10 {
+    grid-column: 2;
+  }
+}
+
 .relationships .relationship-item .label-clear-100 {
   border-color: transparent;
   background-color: #f1f3f4;
