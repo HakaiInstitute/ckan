@@ -351,6 +351,14 @@ section.relationships .list-group-item:last-child {
     grid-column: 2;
     grid-row: span 2;
   }
+
+  /* Its heading carries the generic 20px top margin, which is right when the
+     section follows another one but drops it 21px below the description it is
+     now sitting beside. Only in the two-column layout - stacked, that margin
+     is what separates it from Access and Use above. */
+  .primary > .module > div.module-content > #dataset-resources > h3 {
+    margin-top: 0;
+  }
 }
 
 /* 3b. One soft elevation instead of a hard hairline. Every region currently
