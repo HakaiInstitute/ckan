@@ -590,6 +590,46 @@ curl -fsS http://localhost:5000/api/3/action/status_show | jq .result.ckan_versi
 > changes nothing** — `spatial` only appears in documents written after it, so
 > a `search-index rebuild` has to follow.
 
+> **`ckan.search.solr_allowed_query_parsers` must list every parser the
+> spatial backend needs, in full — setting it at all disables
+> ckanext-spatial's own.** CKAN 2.11 rejects Solr local parameters
+> (`{!parser ...}`) in `q`, `fq` and `fq_list` unless the parser is on this
+> allow-list, which defaults to empty. ckanext-spatial's whole search
+> mechanism is a local parameter: `{!field f=spatial_geom}Intersects(...)` on
+> `solr-spatial-field`, `{!frange incl=false l=0 u=1}...` on `solr-bbox`.
+>
+> `SpatialQuery.update_config` appends whichever its backend needs, so the
+> default empty list is fine. But the append cannot survive the option being
+> set from the environment:
+>
+> ```python
+> # ckan/config/environment.py, update_config()
+> for option in CONFIG_FROM_ENV_VARS:
+>     from_env = os.environ.get(CONFIG_FROM_ENV_VARS[option], None)
+>     if from_env:
+>         config[option] = from_env          # <- raw envvar, overwriting
+> ...
+> for plugin in p.PluginImplementations(p.IConfigurer):
+>     plugin.update_config(config)           # <- spatial appends here
+> ```
+>
+> `update_config()` runs again on **every** plugin load, and starts by writing
+> each `CKAN__` envvar back over config. So any plugin loaded after
+> `spatial_query` wipes the appended parser.
+>
+> The failure is therefore counter-intuitive: setting
+> `CKAN__SEARCH__SOLR_ALLOWED_QUERY_PARSERS = frange` does not *add to*
+> `field`, it *replaces* it, and every bbox and polygon search then fails with
+> `Dataset search error: ("Local parameters are not supported in param
+> 'fq'.",)` and a 400 from `geo_package_search`. Set both:
+>
+> ```ini
+> CKAN__SEARCH__SOLR_ALLOWED_QUERY_PARSERS = field frange
+> ```
+>
+> Listing both also means switching `CKANEXT__SPATIAL__SEARCH_BACKEND` later
+> does not silently break search a second time.
+
 > **`ckan plugin-info` is broken in CKAN 2.12.1 and cannot be used here.**
 > `ckan/cli/plugin_info.py` calls `inspect.getargspec`, removed from Python in
 > 3.11, so on the 3.14 base image it dies with
