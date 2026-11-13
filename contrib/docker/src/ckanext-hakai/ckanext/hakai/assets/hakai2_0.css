@@ -135,12 +135,26 @@ a:focus-visible,
  * users the rest of this file is meant to help, which would have undercut
  * the point. Weight, colour and a hairline separate the sections just as
  * well. */
+/* Every section on the dataset page, named rather than matched by `.module
+ * h3`, which is a (0,1,1) selector that would also catch headings inside the
+ * sections' own content.
+ *
+ * Dataset extent, Dates, Metadata Source, Contacts and Additional Info were
+ * missing from this list and so fell through to cioos_theme's
+ * `.module h3 { font-weight: 400 }` at the browser's default h3 size. The
+ * collapsible ones need nothing extra: `a.section_hide_controle` is already
+ * `color: inherit; text-decoration: none`, so the heading's colour and weight
+ * carry through to the link inside it, and the chevron scales with it. */
 .primary > .module > h3,
 section.access > h3,
 #dataset-resources > h3,
 section.tags > h3,
 section.citation > h3,
-section.relationships > h3 {
+section.relationships > h3,
+section.dataset-map-section > h3,
+section.dates > h3,
+section.metadata_source > h3,
+section.additional-info > h3 {
   font-size: 15px;
   font-weight: 700;
   color: #4a5156;
