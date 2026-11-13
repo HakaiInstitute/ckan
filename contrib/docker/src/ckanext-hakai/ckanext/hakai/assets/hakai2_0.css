@@ -105,12 +105,12 @@ a:focus-visible,
    2. Readability
    ========================================================================== */
 
-/* 2a. Line length. Dataset descriptions run the full ~790px column at 14px,
- * which is roughly 110 characters a line against the 45-75 that reads
- * comfortably. A ch-based cap scales with the font rather than fighting it,
- * and only bites where the measure is genuinely too wide. */
-.notes,
-.limitations,
+/* 2a. Line length. A ch-based cap scales with the font rather than fighting
+ * it, and only bites where the measure is genuinely too wide.
+ *
+ * The dataset page's own prose - .notes and .limitations - is deliberately
+ * not capped: the description and Access and Use run the full width of the
+ * column by request. Same for the search result summaries. */
 .dataset-item .description,
 .module-content > p {
   max-width: 68ch;
@@ -382,89 +382,6 @@ section.relationships .list-group-item:last-child {
   background-color: #f1f3f4;
   color: #5a6065;
   font-weight: 400;
-}
-
-/* 3i. On a wide screen the description and Access and Use stop at 68ch, which
- * leaves the right of the column empty. Lift Data and Resources into it.
- *
- * Everything defaults to spanning both columns, so only the three blocks that
- * take part need naming - that way a dataset missing a DOI, a citation or
- * related works still lays out correctly, rather than the layout depending on
- * counting rows.
- *
- * `dense` is what lets Data and Resources sit beside the description even
- * though it comes after Access and Use in the markup. The DOM order is
- * unchanged, so reading and tab order still run description, access, then
- * resources.
- *
- * Only above 1200px: the container is capped at 1170px, so below that there
- * is no spare width to move anything into and the sections stack as before. */
-@media (min-width: 1200px) {
-  .primary > .module > div.module-content {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 18rem);
-    column-gap: 2rem;
-    align-items: start;
-    grid-auto-flow: row dense;
-  }
-
-  .primary > .module > div.module-content > * {
-    grid-column: 1 / -1;
-    min-width: 0;
-  }
-
-  .primary > .module > div.module-content > .notes,
-  .primary > .module > div.module-content > section.access {
-    grid-column: 1;
-  }
-
-  .primary > .module > div.module-content > #dataset-resources {
-    grid-column: 2;
-    grid-row: span 2;
-  }
-
-  /* Its heading carries the generic 20px top margin, which is right when the
-     section follows another one but drops it 21px below the description it is
-     now sitting beside. Only in the two-column layout - stacked, that margin
-     is what separates it from Access and Use above. */
-  .primary > .module > div.module-content > #dataset-resources > h3 {
-    margin-top: 0;
-  }
-
-  /* The column is only 18rem here, so every pixel the menu button takes comes
-     straight out of the resource name. 36px still clears the 24x24 minimum
-     target size, and the button runs the full height of the row, so it stays
-     comfortably clickable.
-     The name is a `.col-10`, a width fixed at 83.33% that has nothing to do
-     with where the absolutely-positioned button actually starts - it left a
-     dead strip between the two. Sizing it off the button instead hands that
-     strip back to the title and description. */
-  .primary > .module > div.module-content > #dataset-resources
-    .resource-item .resource-menu-toggle {
-    width: 2.25rem;
-  }
-
-  .primary > .module > div.module-content > #dataset-resources
-    .resource-item .heading {
-    width: calc(100% - 2.25rem);
-    /* 60px of that padding was reserved for the format sprite below. */
-    padding-left: 10px;
-  }
-
-  /* The sprite costs 60px - a third of the column - to say something the
-     format is also saying in the resource name and the menu. Hidden the
-     visually-hidden way rather than with `display: none`: CKAN pushes the
-     format name out of view with `text-indent: -900em`, so the span is the
-     only place a screen reader hears it, and display:none would take it out
-     of the accessibility tree along with the picture. */
-  .primary > .module > div.module-content > #dataset-resources
-    .resource-item .format-label {
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    background: none;
-    clip-path: inset(50%);
-  }
 }
 
 /* 3b. One soft elevation instead of a hard hairline. Every region currently
