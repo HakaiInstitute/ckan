@@ -1,42 +1,42 @@
 [submodule "contrib/docker/src/ckanext-harvest"]
 	path = contrib/docker/src/ckanext-harvest
-	url = https://github.com/HakaiInstitute/ckanext-harvest.git
+	url = git@github.com:HakaiInstitute/ckanext-harvest.git
 [submodule "contrib/docker/src/ckanext-spatial"]
 	path = contrib/docker/src/ckanext-spatial
-	url = https://github.com/HakaiInstitute/ckanext-spatial.git
+	url = git@github.com:HakaiInstitute/ckanext-spatial.git
 [submodule "contrib/docker/src/ckanext-cioos_theme"]
 	path = contrib/docker/src/ckanext-cioos_theme
-	url = https://github.com/HakaiInstitute/ckanext-cioos_theme.git
+	url = git@github.com:HakaiInstitute/ckanext-cioos_theme.git
 [submodule "contrib/docker/src/ckanext-geoview"]
 	path = contrib/docker/src/ckanext-geoview
-	url = https://github.com/ckan/ckanext-geoview.git
+	url = git@github.com:ckan/ckanext-geoview.git
 [submodule "contrib/docker/src/ckanext-scheming"]
 	path = contrib/docker/src/ckanext-scheming
-	url = https://github.com/HakaiInstitute/ckanext-scheming.git
+	url = git@github.com:HakaiInstitute/ckanext-scheming.git
 [submodule "contrib/docker/src/cioos-siooc-schema"]
 	path = contrib/docker/src/cioos-siooc-schema
-	url = https://github.com/HakaiInstitute/cioos-siooc-schema.git
+	url = git@github.com:HakaiInstitute/cioos-siooc-schema.git
 [submodule "contrib/docker/src/ckanext-fluent"]
 	path = contrib/docker/src/ckanext-fluent
-	url = https://github.com/HakaiInstitute/ckanext-fluent.git
+	url = git@github.com:HakaiInstitute/ckanext-fluent.git
 [submodule "contrib/docker/src/ckanext-cioos_harvest"]
 	path = contrib/docker/src/ckanext-cioos_harvest
-	url = https://github.com/HakaiInstitute/ckanext-cioos_harvest.git
+	url = git@github.com:HakaiInstitute/ckanext-cioos_harvest.git
 [submodule "contrib/docker/src/ckanext-dcat"]
 	path = contrib/docker/src/ckanext-dcat
-	url = https://github.com/ckan/ckanext-dcat.git
+	url = git@github.com:ckan/ckanext-dcat.git
 [submodule "contrib/docker/src/ckanext-pdfview"]
   path = contrib/docker/src/ckanext-pdfview
-	url = https://github.com/ckan/ckanext-pdfview.git
+	url = git@github.com:ckan/ckanext-pdfview.git
 [submodule "contrib/docker/src/ckanext-hakai"]
 	path = contrib/docker/src/ckanext-hakai
-	url = https://github.com/HakaiInstitute/ckanext-hakai.git
+	url = git@github.com:HakaiInstitute/ckanext-hakai.git
 	branch = main
 [submodule "contrib/docker/src/ckanext-iys"]
 	path = contrib/docker/src/ckanext-iys
-	url = https://github.com/HakaiInstitute/ckanext-iys.git
+	url = git@github.com:HakaiInstitute/ckanext-iys.git
 	branch = main
 [submodule "contrib/docker/src/ckanext-mapp"]
 	path = contrib/docker/src/ckanext-mapp
-	url = https://github.com/HakaiInstitute/ckanext-mapp.git
+	url = git@github.com:HakaiInstitute/ckanext-mapp.git
 	branch = main
