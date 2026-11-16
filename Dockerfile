@@ -1,196 +1,201 @@
 #------------------------------------------------------------------------------#
-FROM ckan/ckan-base:2.9 as base
+# CKAN 2.12 — Debian bookworm / Python 3.14
+#
+# The 2.9 image was Alpine/Python 3.9 and installed extensions with
+# `setup.py install && setup.py develop` into /usr/lib/python3.9/site-packages.
+# The 2.10+ base images are Debian-based, install CKAN as an editable checkout
+# under /srv/app/src, and keep site-packages at /usr/local/lib/python3.14.
+#
+# Build: a `builder` stage carries the compilers and -dev headers, the final
+# stage keeps only the shared libraries needed at runtime.
 #------------------------------------------------------------------------------#
 
-ARG PROJ_VERSION=9.0.0
+ARG CKAN_BASE_TAG=2.12
 
-RUN --mount=type=cache,target=/root/.cache/pip apk add --no-cache .build-deps libc-dev geos geos-dev gdal gdal-dev \
-    proj proj-util proj-dev gcc g++ libffi-dev musl-dev py3-gdal python3-dev\
-    libstdc++ build-base \
-    # Setup build env for PROJ
-    wget curl unzip make libtool autoconf automake pkgconfig g++ sqlite sqlite-dev \
-    # For PROJ and GDAL
-    linux-headers curl-dev tiff-dev zlib-dev zstd-dev lz4-dev libarchive-dev \
-    libjpeg-turbo-dev libpng-dev libwebp-dev expat-dev postgresql-dev openjpeg-dev \
-    # For cryptography
-    gcc musl-dev python3-dev libffi-dev openssl-dev cargo pkgconfig py3-urllib3 py3-cryptography \
-    && pip install cryptography \
-    # Build PROJ
-    && mkdir proj \
-    && apk add --no-cache cmake \
-    && wget -q https://github.com/OSGeo/PROJ/archive/${PROJ_VERSION}.tar.gz -O - \
-    | tar xz -C proj --strip-components=1 \
-    && cd proj \
-    && cmake . \
-    -DBUILD_SHARED_LIBS=ON \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=/usr \
-    -DENABLE_IPO=ON \
-    -DBUILD_TESTING=OFF \
-    && make -j$(nproc) \
-    && make install \
-    && make install DESTDIR="/build_proj" \
-    && cd .. \
-    && rm -rf proj \
-    && for i in /build_proj/usr/lib/*; do strip -s $i 2>/dev/null || /bin/true; done \
-    && for i in /build_proj/usr/bin/*; do strip -s $i 2>/dev/null || /bin/true; done \
-    && apk del cmake \
-    && pip3 install pyproj==3.6.1 --no-cache-dir \
-    && pip3 install gdal==3.4.3 --no-cache-dir \
-    && pip3 install ckanapi --no-cache-dir \
-    && pip3 install -U requests[security] --no-cache-dir \
-    # for debugging
-    && pip3 install 'flask_debugtoolbar==0.14.1' --no-cache-dir \
-    # clean up
-    && apk del .build-deps
+#------------------------------------------------------------------------------#
+FROM ckan/ckan-base:${CKAN_BASE_TAG} AS builder
+#------------------------------------------------------------------------------#
 
-# Define environment variables
+USER root
+
+# Set by the base image already; repeated so the build does not depend on
+# base image internals.
 ENV APP_DIR=/srv/app
 ENV SRC_DIR=/srv/app/src
 ENV CKAN_INI=${APP_DIR}/ckan.ini
 ENV PIP_SRC=${SRC_DIR}
 ENV CKAN_STORAGE_PATH=/var/lib/ckan
 
-# Setup virtual environment for CKAN
-RUN ln -s SRC_DIR/ckan/bin/ckan /usr/local/bin/ckan
+RUN apt-get update && apt-get install --no-install-recommends -y \
+        build-essential \
+        g++ \
+        git \
+        libgdal-dev \
+        libgeos-dev \
+        libpq-dev \
+        libxml2-dev \
+        libxslt1-dev \
+        zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Setup CKAN
-ADD ./contrib/docker/who.ini $APP_DIR/who.ini
+# GDAL's Python bindings are source-only on PyPI (no wheels) and must be built
+# against — and pinned to — the exact libgdal that Debian ships, hence
+# `gdal-config --version`. They still use distutils-era build commands, so
+# setuptools must stay below 81 and numpy must be importable at build time;
+# --no-build-isolation makes both visible to the build.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install "setuptools<81" numpy \
+    && pip3 install --no-build-isolation "gdal==$(gdal-config --version)"
 
-# Copy files to container
-ADD ./contrib/docker/production.ini $CKAN_INI
-ADD ./contrib/docker/crontab $SRC_DIR/ckan/contrib/docker/crontab
-ADD ./contrib/docker/wait-for-postgres.sh /wait-for-postgres.sh
+# pyproj ships manylinux wheels with PROJ bundled, so the from-source PROJ
+# build the 2.9 image needed is no longer required.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install \
+        ckanapi \
+        pyproj \
+        requests \
+        'flask-debugtoolbar>=0.16'
 
-# Set file permissions
-RUN chmod +x /wait-for-postgres.sh
+#------------------------------------------------------------------------------#
+# Extension requirements.
+# Copied before the extension sources so that editing extension code does not
+# invalidate the (slow) dependency layers.
+#------------------------------------------------------------------------------#
 
-# Copy extensions into container and Install
-RUN  chown -R ckan:ckan $APP_DIR $CKAN_STORAGE_PATH
+WORKDIR $SRC_DIR
 
 COPY ./contrib/docker/src/ckanext-dcat/requirements.txt $SRC_DIR/ckanext-dcat/requirements.txt
-RUN --mount=type=cache,target=/root/.cache/pip cd $SRC_DIR && pip3 install -r ckanext-dcat/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip3 install -r $SRC_DIR/ckanext-dcat/requirements.txt
 
 COPY ./contrib/docker/src/ckanext-harvest/requirements.txt $SRC_DIR/ckanext-harvest/requirements.txt
-RUN --mount=type=cache,target=/root/.cache/pip cd $SRC_DIR && pip3 install -r ckanext-harvest/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip3 install -r $SRC_DIR/ckanext-harvest/requirements.txt
 
 COPY ./contrib/docker/src/ckanext-spatial/requirements.txt $SRC_DIR/ckanext-spatial/requirements.txt
-RUN --mount=type=cache,target=/root/.cache/pip cd $SRC_DIR && pip3 install -r ckanext-spatial/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip3 install -r $SRC_DIR/ckanext-spatial/requirements.txt
 
 COPY ./contrib/docker/src/ckanext-cioos_harvest/requirements.txt $SRC_DIR/ckanext-cioos_harvest/requirements.txt
-RUN --mount=type=cache,target=/root/.cache/pip cd $SRC_DIR && pip3 install -r ckanext-cioos_harvest/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip3 install -r $SRC_DIR/ckanext-cioos_harvest/requirements.txt
 
 COPY ./contrib/docker/src/ckanext-cioos_theme/requirements.txt $SRC_DIR/ckanext-cioos_theme/requirements.txt
-RUN --mount=type=cache,target=/root/.cache/pip cd $SRC_DIR && pip3 install -r ckanext-cioos_theme/requirements.txt
-
+RUN --mount=type=cache,target=/root/.cache/pip pip3 install -r $SRC_DIR/ckanext-cioos_theme/requirements.txt
 
 #------------------------------------------------------------------------------#
-FROM base as extensions1
+# Extensions, ordered least- to most-frequently changed so that a theme edit
+# rebuilds as few layers as possible.
+#
+# `pip install -e` replaces `setup.py install && setup.py develop`: setuptools
+# removed the install command and Python 3.12 removed distutils from the
+# stdlib. ckanext-envvars is already installed by the base image.
 #------------------------------------------------------------------------------#
-WORKDIR $SRC_DIR
 
 COPY ./contrib/docker/src/ckanext-geoview $SRC_DIR/ckanext-geoview
-RUN cd $SRC_DIR/ckanext-geoview && python3 setup.py install && python3 setup.py develop
+RUN pip3 install -e $SRC_DIR/ckanext-geoview
 
 COPY ./contrib/docker/src/ckanext-dcat $SRC_DIR/ckanext-dcat
-RUN cd $SRC_DIR/ckanext-dcat && python3 setup.py install && python3 setup.py develop
-
-# included in base image
-RUN cd $SRC_DIR/ckanext-envvars && python3 setup.py install && python3 setup.py develop
-
-WORKDIR $SRC_DIR
-RUN rm -R ./ckan
-
-WORKDIR /usr/lib/python3.9/site-packages/
-RUN find . -maxdepth 1 ! -name 'ckanext*' ! -name '..' ! -name '.' ! -name 'easy-install.pth' | xargs rm -R; mv easy-install.pth easy-install-A.pth
-
-#------------------------------------------------------------------------------#
-FROM base as extensions2
-#------------------------------------------------------------------------------#
-WORKDIR $SRC_DIR
+RUN pip3 install -e $SRC_DIR/ckanext-dcat
 
 COPY ./contrib/docker/src/ckanext-scheming $SRC_DIR/ckanext-scheming
-RUN cd $SRC_DIR/ckanext-scheming && python3 setup.py install && python3 setup.py develop
+RUN pip3 install -e $SRC_DIR/ckanext-scheming
 
 COPY ./contrib/docker/src/ckanext-fluent $SRC_DIR/ckanext-fluent
-RUN cd $SRC_DIR/ckanext-fluent && python3 setup.py install && python3 setup.py develop
-
-COPY ./contrib/docker/src/ckanext-pdfview $SRC_DIR/ckanext-pdfview
-RUN  cd $SRC_DIR/ckanext-pdfview && python3 setup.py install && python3 setup.py develop
-
-COPY ./contrib/docker/src/cioos-siooc-schema/cioos-siooc_schema.json  $SRC_DIR/ckanext-scheming/ckanext/scheming/cioos_siooc_schema.json
-COPY ./contrib/docker/src/cioos-siooc-schema/organization.json $SRC_DIR/ckanext-scheming/ckanext/scheming/
-COPY ./contrib/docker/src/cioos-siooc-schema/ckan_license.json $SRC_DIR/ckanext-scheming/ckanext/scheming/
-COPY ./contrib/docker/src/cioos-siooc-schema/group.json $SRC_DIR/ckanext-scheming/ckanext/scheming/
-
-WORKDIR $SRC_DIR
-RUN rm -R ./ckan
-
-WORKDIR /usr/lib/python3.9/site-packages/
-RUN find . -maxdepth 1 ! -name 'ckanext*' ! -name '..' ! -name '.' ! -name 'easy-install.pth' | xargs rm -R; mv easy-install.pth easy-install-B.pth
-
-#------------------------------------------------------------------------------#
-FROM base as harvest_extensions
-#------------------------------------------------------------------------------#
-WORKDIR $SRC_DIR
+RUN pip3 install -e $SRC_DIR/ckanext-fluent
 
 COPY ./contrib/docker/src/ckanext-harvest $SRC_DIR/ckanext-harvest
-RUN cd $SRC_DIR/ckanext-harvest && python3 setup.py install && python3 setup.py develop
+RUN pip3 install -e $SRC_DIR/ckanext-harvest
 
 COPY ./contrib/docker/src/ckanext-spatial $SRC_DIR/ckanext-spatial
-RUN cd $SRC_DIR/ckanext-spatial && python3 setup.py install && python3 setup.py develop
+RUN pip3 install -e $SRC_DIR/ckanext-spatial
 
-WORKDIR $SRC_DIR
-RUN rm -R ./ckan
-
-WORKDIR /usr/lib/python3.9/site-packages/
-RUN find . -maxdepth 1 ! -name 'ckanext*' ! -name '..' ! -name '.' ! -name 'easy-install.pth' | xargs rm -R; mv easy-install.pth easy-install-C.pth
-
-#------------------------------------------------------------------------------#
-FROM base as cioos_extensions
-#------------------------------------------------------------------------------#
-WORKDIR $SRC_DIR
 COPY ./contrib/docker/src/ckanext-cioos_harvest $SRC_DIR/ckanext-cioos_harvest
-RUN cd $SRC_DIR/ckanext-cioos_harvest && python3 setup.py install && python3 setup.py develop
+RUN pip3 install -e $SRC_DIR/ckanext-cioos_harvest
 
 COPY ./contrib/docker/src/ckanext-cioos_theme $SRC_DIR/ckanext-cioos_theme
-RUN cd $SRC_DIR/ckanext-cioos_theme  && python3 setup.py --help-commands  && python3 setup.py compile_catalog --locale fr && python3 setup.py install && python3 setup.py develop
+# `setup.py compile_catalog` is unavailable now that distutils is gone; pybabel
+# is invoked directly with the domain/directory from the extension's setup.cfg.
+RUN pip3 install -e $SRC_DIR/ckanext-cioos_theme \
+    && cd $SRC_DIR/ckanext-cioos_theme \
+    && pybabel compile -d ckanext/cioos_theme/i18n -D ckanext-cioos_theme -l fr
 
-WORKDIR $SRC_DIR
-RUN rm -R ./ckan
+# ckanext-hakai holds the customisations that used to be patched into the
+# vendored forks, and now the Hakai schemas too - they ship with the extension
+# the same way ckanext-mapp carries mapp_schema.json. They used to be copied
+# in from the cioos-siooc-schema submodule at build time, which hid the fact
+# that its hakai_master branch had diverged from that repo's master.
+# It must be installed after the extensions it overrides.
+COPY ./contrib/docker/src/ckanext-hakai $SRC_DIR/ckanext-hakai
+RUN pip3 install -e $SRC_DIR/ckanext-hakai
 
-WORKDIR /usr/lib/python3.9/site-packages/
-RUN find . -maxdepth 1 ! -name 'ckanext*' ! -name '..' ! -name '.' ! -name 'easy-install.pth' | xargs rm -R; mv easy-install.pth easy-install-D.pth
+# ckanext-mapp is the MaPP site's equivalent: everything that used to live on
+# the mapp_master branches. It is installed in every image but only does
+# anything when CKAN__PLUGINS names it, which only the MaPP deployment does.
+COPY ./contrib/docker/src/ckanext-mapp $SRC_DIR/ckanext-mapp
+RUN pip3 install -e $SRC_DIR/ckanext-mapp \
+    && cd $SRC_DIR/ckanext-mapp \
+    && pybabel compile -d ckanext/mapp/i18n -D ckanext-mapp -l fr
+
+# ckanext-iys, likewise, for the International Year of the Salmon site. It is
+# presentation only: templates and a stylesheet, no i18n catalogue.
+COPY ./contrib/docker/src/ckanext-iys $SRC_DIR/ckanext-iys
+RUN pip3 install -e $SRC_DIR/ckanext-iys
 
 #------------------------------------------------------------------------------#
-FROM base
+FROM ckan/ckan-base:${CKAN_BASE_TAG}
 #------------------------------------------------------------------------------#
-COPY --from=extensions1 $SRC_DIR/ $SRC_DIR/
-COPY --from=extensions1 /usr/lib/python3.9/site-packages/ /usr/lib/python3.9/site-packages/
 
-COPY --from=extensions2 $SRC_DIR/ $SRC_DIR/
-COPY --from=extensions2 /usr/lib/python3.9/site-packages/ /usr/lib/python3.9/site-packages/
+USER root
 
-COPY --from=harvest_extensions $SRC_DIR/ $SRC_DIR/
-COPY --from=harvest_extensions /usr/lib/python3.9/site-packages/ /usr/lib/python3.9/site-packages/
+ENV APP_DIR=/srv/app
+ENV SRC_DIR=/srv/app/src
+ENV CKAN_INI=${APP_DIR}/ckan.ini
+ENV PIP_SRC=${SRC_DIR}
+ENV CKAN_STORAGE_PATH=/var/lib/ckan
 
-COPY --from=cioos_extensions $SRC_DIR/ $SRC_DIR/
-COPY --from=cioos_extensions /usr/lib/python3.9/site-packages/ /usr/lib/python3.9/site-packages/
+# Runtime counterparts of the -dev packages used in the builder stage.
+#   libgdal32    — ckanext-spatial parses GML/WKT/GeoJSON geometries via OGR
+#   libgeos-c1v5 — GEOS, for Shapely
+#   cron         — drives contrib/docker/crontab in the ckan_run_harvester
+#                  service. The 2.9 Alpine image provided busybox crond; Debian
+#                  slim ships no cron at all.
+#   postgresql-client — wait-for-postgres.sh calls psql, and without it the
+#                  container loops forever on "psql: command not found",
+#                  never reaching start_ckan.sh. That in turn means SECRET_KEY
+#                  is never generated and every `ckan` command aborts with
+#                  "SECRET_KEY: Missing value". Bookworm ships the 15 client,
+#                  which is fine for the `psql -c '\q'` liveness check; do not
+#                  use it to pg_dump the 16 server, which refuses on version
+#                  mismatch.
+RUN apt-get update && apt-get install --no-install-recommends -y \
+        cron \
+        libgdal32 \
+        libgeos-c1v5 \
+        libxml2 \
+        libxslt1.1 \
+        postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN sort -u /usr/lib/python3.9/site-packages/easy-install-[ABCD].pth > /usr/lib/python3.9/site-packages/easy-install.pth
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder $SRC_DIR $SRC_DIR
 
-RUN mkdir -p $APP_DIR/logs
-RUN touch "$APP_DIR/logs/ckan_access.log"
-RUN touch "$APP_DIR/logs/ckan_default.log"
+# Setup CKAN. who.ini is gone: repoze.who was replaced by Flask-Login in 2.10.
+#
+# This is the live config, exported from a running container with
+#   docker cp ckan:/srv/app/ckan.ini contrib/docker/ckan.ini
+# It is gitignored, so it does not travel with `git pull` and has to be
+# refreshed on every machine that builds the image. See step 2 of
+# docs/UPGRADE_2.9_TO_2.12.md.
+COPY ./contrib/docker/ckan.ini $CKAN_INI
+COPY ./contrib/docker/crontab $SRC_DIR/ckan/contrib/docker/crontab
+COPY ./contrib/docker/wait-for-postgres.sh /wait-for-postgres.sh
 
-RUN chown -R 92:92 $APP_DIR $CKAN_STORAGE_PATH
+RUN chmod +x /wait-for-postgres.sh \
+    && mkdir -p $APP_DIR/logs \
+    && touch "$APP_DIR/logs/ckan_access.log" \
+    && touch "$APP_DIR/logs/ckan_default.log" \
+    && chown -R ckan:ckan-sys $APP_DIR $CKAN_STORAGE_PATH
 
 WORKDIR $APP_DIR
-
-# ENTRYPOINT ["/ckan-entrypoint.sh"]
 
 USER ckan
 EXPOSE 5000
 
-#CMD ["bash", "/wait-for-postgres.sh", "db", "ckan", "-c", "/srv/app/ckan.ini", "run", "--host", "0.0.0.0"]
 CMD ["bash", "/wait-for-postgres.sh", "db", "/srv/app/start_ckan.sh"]

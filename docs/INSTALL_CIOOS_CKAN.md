@@ -1,5 +1,14 @@
 # Setup CKAN
 
+> **Stale: written for CKAN 2.9.** It refers to paths and steps that no longer
+> exist - `/usr/lib/ckan/venv/...`, copying schemas into ckanext-scheming's
+> package directory, and `production.ini`. On 2.12 the schemas ship inside
+> `ckanext-hakai` and the config file is `contrib/docker/ckan.ini`. See
+> [UPGRADE_2.9_TO_2.12.md](UPGRADE_2.9_TO_2.12.md) and
+> [FEATURES.md](FEATURES.md). Kept for the parts that are still accurate, such
+> as harvester configuration.
+
+
 - [Setup CKAN](#setup-ckan)
   - [Linux](#linux)
     - [Install Docker](#install-docker)
@@ -177,7 +186,7 @@ The rest of the instructions assume you are using a terminal in a Linux environm
 ```bash
 git clone -b cioos https://github.com/cioos-siooc/ckan.git
 cd ckan
-git checkout cioos
+git checkout hakai_master
 ```
 
 add submodules
@@ -188,15 +197,21 @@ git submodule init
 git submodule update
 ```
 
+
 ## Create config files
 
-Create environment file and populate with appropriate values
+Create the environment file for the site you are installing and populate it
+with appropriate values. There is one template per site — `.hakaienv.template`,
+`.mappenv.template`, `.iysenv.template` — and they all drive the same
+`docker-compose.yml`.
 
 ```bash
 cd ~/ckan/contrib/docker/
-cp .env.template .env
-nano .env
+cp .hakaienv.template .hakaienv
+nano .hakaienv
 ```
+
+Pass it to every compose command with `--env-file ./.hakaienv`.
 
 ### Installing CKAN as the root website
 
@@ -204,8 +219,7 @@ If your CKAN installation will run at the root of your domain, for example <http
 
 ```bash
 cd ~/ckan/contrib/docker/
-cp production_root_url.ini production.ini
-cp who_root_url.ini who.ini
+cp ckan.ini.template ckan.ini
 ```
 
 ### Installing CKAN off the root of a website
@@ -215,14 +229,16 @@ Use this setup if your site will run at <http://yourdomain.com/ckan>
 ```bash
 cd ~/ckan/contrib/docker/
 cp production_non_root_url.ini production.ini
-cp who_non_root_url.ini who.ini
 ```
+
+> `who.ini` is gone. repoze.who was replaced by flask-login in CKAN 2.10, and
+> `who_root_url.ini` / `who_non_root_url.ini` no longer exist in the tree.
 
 ### Configuring pyCSW
 
 Copy [pyCSW](https://pycsw.org/) config template file and update the database password.
 
-The database password is the same password entered in your **.env** file
+The database password is the same password entered in your site env file
 
 ```bash
 cd ~/ckan/contrib/docker/pycsw
@@ -618,7 +634,7 @@ sudo docker-compose restart solr
 Rebuild search index
 
 ```bash
-sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini search-index rebuild -o
+sudo docker exec -it ckan ckan --config=/etc/ckan/production.ini search-index rebuild -r
 ```
 
 ### NEW Method

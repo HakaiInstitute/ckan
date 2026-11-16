@@ -73,7 +73,18 @@ fi
 set_environment
 ckan --config "$CONFIG" db init
 
-chown -R ckan:ckan $SRC_DIR/ckan/ckan/public/base/i18n
+# Compiled JS translation catalogues, written by `ckan translation js`.
+#
+# Two 2.9-isms here, both fatal under `set -e`:
+#   - the 2.9 Alpine image ran as ckan:ckan; ckan/ckan-base:2.12 runs as
+#     ckan:ckan-sys (503:502) and has no group called `ckan`, so the old
+#     form failed with "chown: invalid group";
+#   - the directory ships in the 2.9 image but not in 2.12, where nothing
+#     has generated it yet, so chown failed with "No such file or directory".
+I18N_DIR="$SRC_DIR/ckan/ckan/public/base/i18n"
+if [ -d "$I18N_DIR" ]; then
+  chown -R ckan:ckan-sys "$I18N_DIR"
+fi
 
 # must touch log files on first startup if mouinting log volume as the files in
 # the container are masked by the mounted volume

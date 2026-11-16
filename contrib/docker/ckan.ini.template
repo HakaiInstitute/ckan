@@ -1,0 +1,333 @@
+#
+# CKAN configuration template.
+#
+# This is the tracked starting point for `contrib/docker/ckan.ini`, which the
+# Dockerfile copies to /srv/app/ckan.ini at build time. ckan.ini itself is
+# gitignored because it holds generated secrets, so the image-build workflows
+# materialise one from this file:
+#
+#     cp ./contrib/docker/ckan.ini.template ./contrib/docker/ckan.ini
+#
+# A CI-built image therefore carries this template, not any one deployment's
+# config, and relies on the CKAN__* environment variables in the site env file
+# for anything deployment-specific. Keep the two in step.
+#
+# These are some of the configuration options available for your CKAN
+# instance. Check the documentation in 'doc/configuration.rst' or at the
+# following URL for a description of what they do and the full list of
+# available options:
+#
+# http://docs.ckan.org/en/latest/maintaining/configuration.html
+#
+# The %(here)s variable will be replaced with the parent directory of this file
+#
+
+[DEFAULT]
+
+ckan.site_id=default
+
+# WARNING: *THIS SETTING MUST BE SET TO FALSE ON A PRODUCTION ENVIRONMENT*
+debug = false
+debug_tb_profiler_enabled = false
+
+[server:main]
+use = egg:Paste#http
+host = 0.0.0.0
+port = 5000
+
+[app:main]
+use = egg:ckan
+full_stack = true
+cache_dir = /tmp/%(ckan.site_id)s/
+# Secret key used to sign the session cookie and CSRF tokens. Required since
+# CKAN 2.10 - CKAN refuses to start without it. Left blank deliberately:
+# the base image's start_ckan.sh generates SECRET_KEY, WTF_CSRF_SECRET_KEY and
+# the api_token.jwt secrets on first boot when it finds this key empty.
+SECRET_KEY =
+
+# `ckan generate config` generates a unique value for this each time it generates
+# a config file.
+app_instance_uuid =
+
+# repoze.who was replaced by flask-login in CKAN 2.10; who.* settings and
+# who.ini are gone. Session lifetime is now ckan.user.session_lifetime.
+
+## Database Settings
+sqlalchemy.url = postgresql://ckan_default:pass@localhost/ckan_default
+
+# PostgreSQL' full-text search parameters
+ckan.datastore.default_fts_lang = english
+ckan.datastore.default_fts_index_method = gist
+
+
+
+
+## Authorization Settings
+
+ckan.auth.anon_create_dataset = false
+ckan.auth.create_unowned_dataset = false
+ckan.auth.create_dataset_if_not_in_organization = false
+ckan.auth.user_create_groups = false
+ckan.auth.user_create_organizations = false
+ckan.auth.user_delete_groups = true
+ckan.auth.user_delete_organizations = true
+ckan.auth.create_user_via_api = false
+ckan.auth.create_user_via_web = false
+ckan.auth.roles_that_cascade_to_sub_groups = admin
+
+# `paster make-config` generates a unique value for this each time it generates
+# a config file.
+## API Token Settings
+api_token.nbytes = 60
+# api_token.jwt.encode.secret = string:
+# api_token.jwt.decode.secret = string:
+api_token.jwt.algorithm = HS256
+
+## API Token: expire_api_token plugin
+expire_api_token.default_lifetime = 3600
+
+## Search Settings
+ckan.group_and_organization_list_all_fields_max = 25
+ckan.group_and_organization_list_max = 1000
+
+
+
+## Plugins Settings
+
+# Note: Add ``datastore`` to enable the CKAN DataStore
+#       Add ``datapusher`` to enable DataPusher
+#		Add ``resource_proxy`` to enable resorce proxying and get around the
+#		same origin policy
+ckan.plugins = envvars
+            #   stats
+            #   activity
+            #   text_view
+            #   image_view
+            #   datatables_view
+            #   datastore
+            #   datapusher
+            #   scheming_datasets
+            #   scheming_organizations
+            #   scheming_groups
+            #   scheming_nerf_index
+            #   fluent
+            #   harvest
+            #   ckan_harvester
+            #   csw_harvester
+            #   waf_harvester
+            #   doc_harvester
+            #   ckan_schema_harvester
+            #   spatial_metadata
+            #   spatial_query
+            #   spatial_harvest_metadata_api
+            #   cioos_harvest
+            #   cioos_theme
+            #   hakai
+            # MaPP only. `mapp` must follow `cioos_theme`, and `mapp_harvest`
+            # must follow `cioos_harvest`.
+            #   mapp
+            #   mapp_harvest
+            # IYS only. `iys` must follow `cioos_theme`.
+            #   iys
+            #   ckan_cioos_harvester
+            #   dcat
+            #   structured_data
+            #   resource_proxy
+            #   geo_view
+            #   geojson_view
+            #   wmts_view
+            #   ckan_spatial_harvester
+            #   datastream_harvester
+            #   geonetwork_harvester
+
+#   module-path:file to schemas being used
+scheming.dataset_schemas = ckanext.hakai:schemas/cioos_siooc_schema.json
+scheming.presets = ckanext.hakai:presets/hakai_presets.json
+                   ckanext.scheming:presets.json
+                   ckanext.fluent:presets.json
+scheming.dataset_fallback = true
+scheming.organization_schemas = ckanext.hakai:schemas/organization.json
+scheming.group_schemas = ckanext.hakai:schemas/group.json
+
+
+## Redis Settings
+
+# URL to your Redis instance, including the database to be used.
+ckan.redis.url = redis://redis:6379/1
+
+ckan.harvest.mq.type = redis
+ckan.harvest.mq.hostname = redis
+ckan.harvest.mq.port = 6379
+ckan.harvest.mq.redis_db = 1
+ckan.harvest.log_scope = 0
+ckan.harvest.log_timeframe = 30
+ckan.harvest.log_level = info
+ckanext.harvest.default_dataset_name_append = number-sequence
+ckan.harvest.status_mail.errored = True
+
+scheming.composite.separator = |
+
+
+# Define which views should be created by default
+# (plugins must be loaded in ckan.plugins)
+ckan.views.default_views = image_view text_view datatables_view geo_view geojson_view wmts_view
+ckanext.geoview.ol_viewer.hide_overlays: false
+ckanext.geoview.ol_viewer.default_feature_hoveron: true
+ckanext.geoview.ol_viewer.forward_ogc_request_params: true
+
+# Customize which text formats the text_view plugin will show
+#ckan.preview.json_formats = json
+#ckan.preview.xml_formats = xml rdf rdf+xml owl+xml atom rss
+#ckan.preview.text_formats = text plain text/plain
+
+# Customize which image formats the image_view plugin will show
+#ckan.preview.image_formats = png jpeg jpg gif
+
+## Front-End Settings
+
+# Uncomment following configuration to enable using of Bootstrap 2
+#ckan.base_public_folder = public-bs2
+#ckan.base_templates_folder = templates-bs2
+
+ckan.site_logo = /base/images/ckan-logo.png
+ckan.favicon = /base/images/ckan.ico
+ckan.gravatar_default = identicon
+ckan.preview.direct = png jpg gif
+ckan.preview.loadable = html htm rdf+xml owl+xml xml n3 n-triples turtle plain atom csv tsv rss txt json
+ckan.display_timezone = UTC
+
+# package_hide_extras = for_search_index_only
+#package_edit_return_url = http://another.frontend/dataset/<NAME>
+#package_new_return_url = http://another.frontend/dataset/<NAME>
+#ckan.recaptcha.publickey =
+#ckan.recaptcha.privatekey =
+
+#license file downloaded from https://licenses.opendefinition.org/licenses/groups/ckan.json
+licenses_group_url = file:///srv/app/src/ckanext-hakai/ckanext/hakai/schemas/ckan_license.json
+
+## Feeds Settings
+
+ckan.feeds.authority_name =
+ckan.feeds.date =
+ckan.feeds.author_name =
+ckan.feeds.author_link =
+
+## Storage Settings
+
+#ckan.storage_path = /var/lib/ckan
+#ckan.max_resource_size = 10
+#ckan.max_image_size = 2
+
+## Datapusher settings
+
+# Make sure you have set up the DataStore
+
+ckan.datapusher.formats = csv xls xlsx tsv application/csv application/vnd.ms-excel application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+#ckan.datapusher.assume_task_stale_after = 3600
+
+# Resource Proxy settings
+# Preview size limit, default: 1MB
+#ckan.resource_proxy.max_file_size = 1048576
+# Size of chunks to read/write.
+#ckan.resource_proxy.chunk_size = 4096
+
+## Activity Streams Settings
+
+#ckan.activity_streams_enabled = true
+#ckan.activity_list_limit = 31
+#ckan.activity_streams_email_notifications = true
+#ckan.email_notifications_since = 2 days
+ckan.hide_activity_from_users = %(ckan.site_id)s
+
+
+
+## Logging configuration
+[loggers]
+keys = root, ckan_lib_maintain, ckan, ckanext, werkzeug, ckanext.cioos_theme1, ckanext.cioos_theme2, ckanext.harvest1, ckanext.harvest2
+
+[handlers]
+keys = console, file, filerotate, harvest_file
+
+[formatters]
+keys = generic
+
+[logger_root]
+level = WARNING
+handlers = console, file
+
+[logger_werkzeug]
+level = WARNING
+handlers = console
+qualname = werkzeug
+propagate = 0
+
+[logger_ckan_lib_maintain]
+level = ERROR
+handlers = console
+qualname = ckan.lib.maintain
+propagate = 0
+
+[logger_ckan]
+level = WARNING
+handlers = console, file
+qualname = ckan
+propagate = 0
+
+[logger_ckanext]
+level = DEBUG
+handlers = console
+qualname = ckanext
+propagate = 0
+
+[logger_ckanext.cioos_theme1]
+level = INFO
+handlers = filerotate
+# have to specify .plugin.auth here otherwise all info message are captured by the
+# debug logger and will not make it to the access log
+qualname = ckanext.cioos_theme.plugin.auth
+propagate = 0
+
+[logger_ckanext.cioos_theme2]
+level = DEBUG
+handlers = console
+qualname = ckanext.cioos_theme
+propagate = 0
+
+[logger_ckanext.harvest1]
+level = INFO
+handlers = console, harvest_file
+qualname = ckanext.harvest
+propagate = 0
+
+[logger_ckanext.harvest2]
+level = DEBUG
+handlers = console
+qualname = ckanext.harvest
+propagate = 0
+
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+
+[handler_file]
+class = handlers.RotatingFileHandler
+args = ('/srv/app/logs/ckan_default.log', 'a', 2000000, 1)
+level = NOTSET
+formatter = generic
+
+[handler_harvest_file]
+class = FileHandler
+args = ('/srv/app/logs/ckan_harvest.log', 'a')
+level = NOTSET
+formatter = generic
+
+[handler_filerotate]
+class = handlers.RotatingFileHandler
+args = ('/srv/app/logs/ckan_access.log', 'a', 2000000, 9)
+level = NOTSET
+formatter = generic
+
+[formatter_generic]
+format = %(asctime)s %(levelname)-5.5s [%(name)s] %(message)s (%(filename)s:%(lineno)s)
