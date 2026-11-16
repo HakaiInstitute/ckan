@@ -1,0 +1,123 @@
+name: MaPP CKAN Docker Image
+
+# One workflow per site, each filtered to its own branch. The three are kept
+# on every site branch rather than one apiece: for a push, GitHub reads the
+# workflow files out of the pushed commit and applies `branches:` against the
+# pushed ref, so only the matching one ever runs. Keeping all three everywhere
+# means merging between site branches no longer collides on a single shared
+# file, which is what used to happen.
+#
+# Image tags are prefixed per site (hakaiinstitute/ckan:mapp_latest), including the
+# PR tags - without the prefix a PR on one site branch would overwrite, and on
+# merge delete, another site's tag of the same name.
+
+on:
+  workflow_dispatch:
+  push:
+   branches: [ MaPP_master ]
+   tags:
+      - mapp-*
+  pull_request:
+    branches: [ MaPP_master ]
+    types: [opened, synchronize, reopened, closed]
+
+env:
+  submod_path: "contrib/docker/src"
+
+jobs:
+  delete_pr:
+    if: |
+      (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true)
+    name: Delete docker tag on pull request merge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set PR number as TAG env variable for pull requests
+        if: github.event_name == 'pull_request'
+        run: echo "TAG=mapp_PR${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+
+      - run: docker run --rm -i lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} hakaiinstitute/ckan:$TAG
+
+  build_ckan:
+    name: build MaPP ckan docker image
+    runs-on: ubuntu-latest
+    steps:
+    - if: github.event_name == 'pull_request'
+      name: Checkout pull request with submodules
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        submodules: 'recursive'
+        fetch-depth: '0'
+    - if: github.event_name != 'pull_request'
+      name: Checkout non pull request with submodules
+      uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+        fetch-depth: '0'
+    # ckan.ini is the only prep the Dockerfile needs: it COPYs that file.
+    # The .env and who.ini copies that used to sit here were vestigial - nothing
+    # in the build read them, who_root_url.ini has not existed for some time, and
+    # .env.template is gone in favour of the per-site .*env.template files.
+    - run: cp ./contrib/docker/ckan.ini.template ./contrib/docker/ckan.ini
+
+    - name: Set current date as TAG env variable for push requests
+      if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      run: echo "TAG=mapp_$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+    - name: Get git tag
+      if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+      run: echo "TAG=mapp_${{  github.ref_name }}" >> $GITHUB_ENV
+    - name: Set PR number as TAG env variable for pull requests
+      if: github.event_name == 'pull_request'
+      run: echo "TAG=mapp_PR${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - if: github.event_name == 'pull_request'
+      name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        tags: |
+          hakaiinstitute/ckan:${{env.TAG}}
+
+    - if: github.event_name != 'pull_request'
+      name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        tags: |
+          hakaiinstitute/ckan:mapp_latest
+          hakaiinstitute/ckan:${{env.TAG}}
+
+    - if: github.event_name == 'pull_request'
+      uses: mshick/add-pr-comment@v1
+      with:
+        message: |
+          Image has been pushed to [hakaiinstitute/ckan](https://hub.docker.com/repository/docker/hakaiinstitute/ckan)
+          ## Testing Quick Start
+          ### Pull image
+          `sudo docker pull hakaiinstitute/ckan:${{ env.TAG }}`
+          or
+          `sudo CKAN_TAG=${{ env.TAG }} docker-compose pull ckan`
+          ### Remove Home Volume and Restart
+          ```
+          sudo docker-compose down
+          sudo docker volume rm docker_ckan_home
+          sudo CKAN_TAG=${{ env.TAG }} docker-compose up -d
+          ```
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        repo-token-user-login: 'github-actions[bot]' # The user.login for temporary GitHub tokens
+        allow-repeats: false # This is the default
