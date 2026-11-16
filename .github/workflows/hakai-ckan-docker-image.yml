@@ -1,4 +1,15 @@
-name: CKAN Docker Prod Image
+name: Hakai CKAN Docker Image
+
+# One workflow per site, each filtered to its own branch. The three are kept
+# on every site branch rather than one apiece: for a push, GitHub reads the
+# workflow files out of the pushed commit and applies `branches:` against the
+# pushed ref, so only the matching one ever runs. Keeping all three everywhere
+# means merging between site branches no longer collides on a single shared
+# file, which is what used to happen.
+#
+# Image tags are prefixed per site (hakaiinstitute/ckan:latest), including the
+# PR tags - without the prefix a PR on one site branch would overwrite, and on
+# merge delete, another site's tag of the same name.
 
 on:
   workflow_dispatch:
@@ -7,7 +18,7 @@ on:
    tags:
       - hakai-*
   pull_request:
-    branches: [ cioos]
+    branches: [ hakai_master ]
     types: [opened, synchronize, reopened, closed]
   release:
     types: [published]
@@ -29,7 +40,7 @@ jobs:
       - run: docker run --rm -i lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} hakaiinstitute/ckan:$TAG
 
   build_ckan:
-    name: build ckan docker image
+    name: build Hakai ckan docker image
     runs-on: ubuntu-latest
     steps:
     - if: github.event_name == 'pull_request'
@@ -45,9 +56,11 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: '0'
-    - run: cp ./contrib/docker/.env.template ./contrib/docker/.env
-    - run: cp ./contrib/docker/production_root_url.ini ./contrib/docker/production.ini
-    - run: cp ./contrib/docker/who_root_url.ini ./contrib/docker/who.ini
+    # ckan.ini is the only prep the Dockerfile needs: it COPYs that file.
+    # The .env and who.ini copies that used to sit here were vestigial - nothing
+    # in the build read them, who_root_url.ini has not existed for some time, and
+    # .env.template is gone in favour of the per-site .*env.template files.
+    - run: cp ./contrib/docker/ckan.ini.template ./contrib/docker/ckan.ini
 
     - name: Set current date as TAG env variable for push requests
       if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
