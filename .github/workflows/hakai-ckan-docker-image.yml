@@ -1,4 +1,15 @@
-name: CKAN Docker Prod Image
+name: Hakai CKAN Docker Image
+
+# One workflow per site, each filtered to its own branch. The three are kept
+# on every site branch rather than one apiece: for a push, GitHub reads the
+# workflow files out of the pushed commit and applies `branches:` against the
+# pushed ref, so only the matching one ever runs. Keeping all three everywhere
+# means merging between site branches no longer collides on a single shared
+# file, which is what used to happen.
+#
+# Image tags are prefixed per site (hakaiinstitute/ckan:latest), including the
+# PR tags - without the prefix a PR on one site branch would overwrite, and on
+# merge delete, another site's tag of the same name.
 
 on:
   workflow_dispatch:
@@ -29,7 +40,7 @@ jobs:
       - run: docker run --rm -i lumir/remove-dockerhub-tag --user ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} hakaiinstitute/ckan:$TAG
 
   build_ckan:
-    name: build ckan docker image
+    name: build Hakai ckan docker image
     runs-on: ubuntu-latest
     steps:
     - if: github.event_name == 'pull_request'
