@@ -30,13 +30,13 @@
 	url = git@github.com:ckan/ckanext-pdfview.git
 [submodule "contrib/docker/src/ckanext-hakai"]
 	path = contrib/docker/src/ckanext-hakai
-	url = git@github.com:HakaiInstitute/ckanext-hakai.git
+	url = https://github.com/HakaiInstitute/ckanext-hakai.git
 	branch = main
 [submodule "contrib/docker/src/ckanext-iys"]
 	path = contrib/docker/src/ckanext-iys
-	url = git@github.com:HakaiInstitute/ckanext-iys.git
+	url = https://github.com/HakaiInstitute/ckanext-iys.git
 	branch = main
 [submodule "contrib/docker/src/ckanext-mapp"]
 	path = contrib/docker/src/ckanext-mapp
-	url = git@github.com:HakaiInstitute/ckanext-mapp.git
+	url = https://github.com/HakaiInstitute/ckanext-mapp.git
 	branch = main
