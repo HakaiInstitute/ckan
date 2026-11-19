@@ -190,6 +190,7 @@ services:
   db:
     container_name: db
     image: ${DB_IMAGE:-hakaiinstitute/postgresql:latest}
+    restart: unless-stopped
     ports:
        - "5432:5432"
     environment:
